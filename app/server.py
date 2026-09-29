@@ -16,6 +16,7 @@ them and the result still lands in that backend's output/ dir.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import threading
@@ -36,6 +37,9 @@ from .workflows import ANIMATE, REPLACE, Adapter
 OUT_DIR = Path(os.environ.get("OUT_DIR", "/app/outputs"))
 UPLOAD_DIR = OUT_DIR / "uploads"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+# assets/gallery/<service>/<case>/{image.*, video.*, result.*, meta.json}; see assets/gallery/README.md.
+GALLERY_DIR = Path(os.environ.get("GALLERY_DIR",
+                                  Path(__file__).resolve().parents[1] / "assets" / "gallery"))
 
 # Replacement costs ~3 min fixed plus ~3.3 s/frame (measured), so a full
 # 1140-frame job runs 65-70 min. Three hours leaves room for a cold model load
@@ -250,11 +254,46 @@ def get_video(job_id: str):
                         content_disposition_type="inline")
 
 
+def _gallery() -> dict[str, list[dict]]:
+    """Scan GALLERY_DIR on every call, so cases can be added without a restart."""
+    out: dict[str, list[dict]] = {name: [] for name in BACKENDS}
+    for service in out:
+        for case in sorted(p for p in (GALLERY_DIR / service).glob("*") if p.is_dir()):
+            def find(stem: str, exts: set[str]) -> str | None:
+                for f in sorted(case.glob(f"{stem}.*")):
+                    if f.suffix.lower() in exts:
+                        return f"/gallery/{service}/{case.name}/{f.name}"
+                return None
+            result = find("result", VIDEO_EXT)
+            if not result:
+                continue
+            meta = {}
+            try:
+                meta = json.loads((case / "meta.json").read_text())
+            except (OSError, ValueError):
+                pass
+            out[service].append({
+                "title": str(meta.get("title") or case.name.replace("_", " ")),
+                "note": str(meta.get("note") or ""),
+                "image": find("image", IMAGE_EXT),
+                "video": find("video", VIDEO_EXT),
+                "result": result,
+            })
+    return out
+
+
+@app.get("/api/gallery")
+def gallery() -> dict:
+    return _gallery()
+
+
 @app.get("/")
 def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+if GALLERY_DIR.is_dir():
+    app.mount("/gallery", StaticFiles(directory=GALLERY_DIR), name="gallery")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

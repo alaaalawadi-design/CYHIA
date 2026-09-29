@@ -162,12 +162,14 @@ services:
       UI_HOST: "0.0.0.0"
       UI_PORT: "7860"
       OUT_DIR: "/app/outputs"
+      GALLERY_DIR: "/app/assets/gallery"
 
     volumes:
       # Mounted rather than baked: the UI can be edited and restarted in
       # seconds without touching either GPU container.
       - ./app:/app/app:ro
       - ./workflows:/app/workflows:ro
+      - ./assets/gallery:/app/assets/gallery:ro
       - ./data/ui_outputs:/app/outputs
 
     # Deliberately not `condition: service_healthy` on the backends: the UI

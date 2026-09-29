@@ -137,6 +137,20 @@
   .guide .limits td { padding: 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
   .guide .limits td:first-child { color: var(--muted); padding-right: 12px; white-space: nowrap; }
   .guide .tip { margin: 14px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); font-size: 14px; }
+  .gallery { margin-top: 36px; }
+  .gallery h2 { font-size: 22px; letter-spacing: -.02em; margin: 0 0 4px; }
+  .gallery > p { color: var(--muted); margin: 0 0 16px; }
+  .cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+  .case { padding: 14px; }
+  .case h3 { font-size: 16px; margin: 0 0 2px; letter-spacing: -.01em; }
+  .case .note { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+  .case .trio { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .case figure { margin: 0; min-width: 0; }
+  .case figure.wide { grid-column: 1 / -1; }
+  .case figcaption { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+  .case figure.wide figcaption { color: var(--accent); }
+  .case img, .case video { width: 100%; max-height: 260px; object-fit: contain; background: #000; border-radius: 8px; display: block; }
+  .case figure.wide video { max-height: 420px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -207,6 +221,12 @@
     </section>
   </template>
   <div id="panels"></div>
+
+  <section class="gallery" id="gallery" hidden>
+    <h2>Gallery</h2>
+    <p class="gallery-sub"></p>
+    <div class="cases"></div>
+  </section>
 </main>
 
 <script>
@@ -421,10 +441,41 @@ function makePanel(service) {
 // ── tabs ────────────────────────────────────────────────────────────────────
 const panels = document.getElementById("panels");
 for (const s of Object.keys(SERVICES)) panels.append(makePanel(s));
+async function loadGallery(service) {
+  const box = document.getElementById("gallery");
+  let cases = [];
+  try { cases = (await (await fetch("/api/gallery")).json())[service] || []; } catch {}
+  box.hidden = !cases.length;
+  const list = box.querySelector(".cases");
+  list.replaceChildren();
+  box.querySelector(".gallery-sub").textContent = service === "replace"
+    ? "Examples of character replacement: the result is your reference character in the driving video's scene."
+    : "Examples of animation: the reference image performing the driving video's motion.";
+  const fig = (label, tag, src, wide) => {
+    if (!src) return null;
+    const f = document.createElement("figure"), c = document.createElement("figcaption"), m = document.createElement(tag);
+    if (wide) f.className = "wide";
+    c.textContent = label; m.src = src;
+    if (tag === "video") { m.controls = true; m.muted = true; m.loop = true; m.playsInline = true; m.preload = "metadata"; }
+    f.append(c, m);
+    return f;
+  };
+  for (const c of cases) {
+    const card = document.createElement("article"); card.className = "card case";
+    const h = document.createElement("h3"); h.textContent = c.title; card.append(h);
+    if (c.note) { const n = document.createElement("p"); n.className = "note"; n.textContent = c.note; card.append(n); }
+    const trio = document.createElement("div"); trio.className = "trio";
+    trio.append(...[fig("Reference", "img", c.image), fig("Driving video", "video", c.video),
+                    fig("Result", "video", c.result, true)].filter(Boolean));
+    card.append(trio); list.append(card);
+  }
+}
+
 function selectTab(name) {
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
   document.querySelectorAll("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== name);
   store.set("tab", name);
+  loadGallery(name);
 }
 document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => selectTab(b.dataset.tab)));
 selectTab(SERVICES[store.get("tab")] ? store.get("tab") : "replace");
