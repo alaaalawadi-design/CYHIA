@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cy_hia — Animate & Replace</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e2e1dc; --accent: #3a5bd9; --accent-text: #fff;
+    --ok: #2f8f4e; --busy: #c28a12; --bad: #c43d3d; --err-bg: #fbeaea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --panel: #1f1f1d; --text: #ececea; --muted: #9a9a94;
+      --line: #33332f; --accent: #6f8cf0; --accent-text: #0e0e0d;
+      --ok: #52b872; --busy: #e0a93a; --bad: #e46a6a; --err-bg: #3a2020;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+  .tabs button {
+    font: inherit; background: none; border: 0; color: var(--muted); cursor: pointer;
+    padding: 10px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ready { background: var(--ok); } .dot.busy { background: var(--busy); } .dot.offline { background: var(--bad); }
+
+  .status { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 8px; }
+  .status b { font-weight: 600; }
+  .blurb { color: var(--muted); margin: 0 0 18px; max-width: 70ch; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+
+  .drop {
+    display: block; position: relative; border: 1.5px dashed var(--line); border-radius: 8px;
+    min-height: 200px; margin-bottom: 14px; cursor: pointer; overflow: hidden;
+    background: var(--bg);
+  }
+  .drop.over { border-color: var(--accent); }
+  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 1; }
+  .drop .hint {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 12px;
+  }
+  .drop .hint strong { color: var(--text); font-weight: 600; }
+  .drop img, .drop video { display: block; width: 100%; max-height: 280px; object-fit: contain; background: #000; }
+  .drop.has .hint { display: none; }
+  .drop .clear {
+    position: absolute; top: 6px; right: 6px; z-index: 2; display: none;
+    font: inherit; font-size: 12px; border: 0; border-radius: 6px; padding: 3px 8px;
+    background: rgba(0,0,0,.6); color: #fff; cursor: pointer;
+  }
+  .drop.has .clear { display: block; }
+  .label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+
+  .go {
+    width: 100%; font: inherit; font-weight: 600; padding: 11px; border: 0; border-radius: 8px;
+    background: var(--accent); color: var(--accent-text); cursor: pointer;
+  }
+  .go:disabled { opacity: .5; cursor: not-allowed; }
+
+  .result video { width: 100%; max-height: 580px; background: #000; border-radius: 6px; display: block; }
+  .empty { color: var(--muted); min-height: 200px; display: flex; align-items: center; justify-content: center; text-align: center; }
+  .progress { margin: 0 0 12px; font-size: 14px; }
+  .progress .stage { font-weight: 600; }
+  .progress .meta { color: var(--muted); }
+  .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  /* Indeterminate: no honest overall fraction exists for a ~100-node graph. */
+  .bar.spin > i { width: 30%; animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+  @media (prefers-reduced-motion: reduce) { .bar.spin > i { animation: none; width: 100%; opacity: .4; } }
+  .error { background: var(--err-bg); color: var(--bad); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; overflow-wrap: anywhere; }
+  .dl { display: inline-block; margin-top: 10px; color: var(--accent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>cy_hia</h1>
+  <p class="sub">Two GPU services behind one interface.</p>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="replace" aria-selected="true"><span class="dot" data-dot="replace"></span>Replace character</button>
+    <button role="tab" data-tab="animate" aria-selected="false"><span class="dot" data-dot="animate"></span>Animate</button>
+  </nav>
+
+  <template id="panel-tpl">
+    <section class="panel" role="tabpanel">
+      <div class="status"><span class="dot"></span><span class="status-text">Checking…</span></div>
+      <p class="blurb"></p>
+      <div class="grid">
+        <div class="card">
+          <div class="label">Reference character (image)</div>
+          <div class="drop" data-kind="image">
+            <input type="file" accept="image/*">
+            <div class="hint"><strong>Drop an image or click to choose</strong>PNG, JPG or WebP</div>
+            <button type="button" class="clear">Remove</button>
+          </div>
+          <div class="label">Driving video (provides the motion)</div>
+          <div class="drop" data-kind="video">
+            <input type="file" accept="video/*">
+            <div class="hint"><strong>Drop a video or click to choose</strong>MP4, MOV or WebM</div>
+            <button type="button" class="clear">Remove</button>
+          </div>
+          <button class="go" disabled>Generate</button>
+        </div>
+        <div class="card result">
+          <div class="label">Result</div>
+          <div class="error" hidden></div>
+          <div class="progress" hidden>
+            <div><span class="stage"></span> <span class="meta"></span></div>
+            <div class="bar"><i></i></div>
+          </div>
+          <div class="empty">The result will appear here.</div>
+          <div class="out" hidden>
+            <video controls playsinline></video>
+            <a class="dl" download>Download video</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </template>
+  <div id="panels"></div>
+</main>
+
+<script>
+"use strict";
+
+const SERVICES = {
+  replace: "Puts the character from your image into the driving video, matching pose, " +
+           "framing and lighting. The result is shown side by side with the original, " +
+           "with the original audio. A full-length clip takes roughly an hour.",
+  animate: "Animates the character in your image using the motion of the driving video.",
+};
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
+};
+
+const minutes = s => s < 60 ? `${Math.round(s)} s` : `${(s / 60).toFixed(1)} min`;
+
+function makePanel(service) {
+  const el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
+  el.dataset.panel = service;
+  el.querySelector(".blurb").textContent = SERVICES[service];
+  const $ = s => el.querySelector(s);
+  const files = { image: null, video: null };
+  const go = $(".go");
+  let busy = false, pollTimer = null;
+
+  // ── inputs ────────────────────────────────────────────────────────────────
+  el.querySelectorAll(".drop").forEach(drop => {
+    const kind = drop.dataset.kind, input = drop.querySelector("input");
+    let url = null;
+    const set = file => {
+      if (url) URL.revokeObjectURL(url);
+      drop.querySelector("img,video")?.remove();
+      files[kind] = file || null;
+      drop.classList.toggle("has", !!file);
+      if (file) {
+        url = URL.createObjectURL(file);
+        const m = document.createElement(kind === "image" ? "img" : "video");
+        m.src = url;
+        if (kind === "video") { m.muted = true; m.controls = true; m.playsInline = true; }
+        drop.prepend(m);
+      }
+      // A preview element sits over the input; keep the input clickable only when empty.
+      input.style.display = file ? "none" : "";
+      refresh();
+    };
+    input.addEventListener("change", () => set(input.files[0]));
+    drop.querySelector(".clear").addEventListener("click", e => {
+      e.preventDefault(); input.value = ""; set(null);
+    });
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", e => {
+      e.preventDefault(); drop.classList.remove("over");
+      const f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith(kind + "/")) set(f);
+    });
+  });
+
+  function refresh() { go.disabled = busy || !files.image || !files.video; }
+
+  // ── output side ───────────────────────────────────────────────────────────
+  function show({ error = null, stage = null, meta = "", fraction = null, result = null, filename = null }) {
+    $(".error").hidden = !error; $(".error").textContent = error || "";
+    $(".progress").hidden = !stage;
+    if (stage) {
+      $(".stage").textContent = stage; $(".meta").textContent = meta;
+      $(".bar").classList.toggle("spin", fraction == null);
+      $(".bar > i").style.width = fraction == null ? "" : `${Math.round(fraction * 100)}%`;
+    }
+    $(".out").hidden = !result;
+    $(".empty").hidden = !!(stage || result);
+    if (result) {
+      const v = $(".out video");
+      if (v.getAttribute("src") !== result) v.src = result;
+      $(".dl").href = result; $(".dl").download = filename || "result.mp4";
+    }
+  }
+
+  function setBusy(b) { busy = b; go.textContent = b ? "Working…" : "Generate"; refresh(); }
+
+  // ── running a job ─────────────────────────────────────────────────────────
+  go.addEventListener("click", () => {
+    const fd = new FormData();
+    fd.append("image", files.image);
+    fd.append("video", files.video);
+    setBusy(true);
+    show({ stage: "Uploading", meta: "0%", fraction: 0 });
+
+    // XHR rather than fetch: upload progress is the one honest fraction we have.
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/${service}/jobs`);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) show({ stage: "Uploading", meta: `${Math.round(e.loaded / e.total * 100)}%`, fraction: e.loaded / e.total });
+    };
+    xhr.onload = () => {
+      let body = {};
+      try { body = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status !== 200) {
+        setBusy(false);
+        show({ error: body.detail || `Upload failed (HTTP ${xhr.status}).` });
+        return;
+      }
+      store.set(`job:${service}`, body.id);
+      track(body.id);
+    };
+    xhr.onerror = () => { setBusy(false); show({ error: "Upload failed: the UI server could not be reached." }); };
+    xhr.send(fd);
+  });
+
+  function track(id) {
+    setBusy(true);
+    clearTimeout(pollTimer);
+    const poll = async () => {
+      let job;
+      try {
+        const r = await fetch(`/api/jobs/${id}`);
+        job = await r.json();
+        if (!r.ok) throw new Error(job.detail || `HTTP ${r.status}`);
+      } catch (e) {
+        if (String(e.message).startsWith("Unknown job")) {
+          store.set(`job:${service}`, null); setBusy(false);
+          show({ error: `Lost track of the job: ${e.message}` });
+          return;
+        }
+        pollTimer = setTimeout(poll, 5000);       // UI server blip: keep trying
+        return;
+      }
+      if (job.state === "done") {
+        store.set(`job:${service}`, null); setBusy(false);
+        show({ result: job.result, filename: job.filename });
+        return;
+      }
+      if (job.state === "error") {
+        store.set(`job:${service}`, null); setBusy(false);
+        show({ error: job.error });
+        return;
+      }
+      if (job.state === "queued") {
+        show({ stage: "Waiting for the GPU", meta: job.ahead ? `· ${job.ahead} job${job.ahead > 1 ? "s" : ""} ahead` : "" });
+      } else {
+        // Stage name + elapsed, not a percentage: see CLAUDE.md.
+        const step = job.steps ? ` · step ${job.step}/${job.steps}` : "";
+        show({ stage: job.stage, meta: `${step} · ${minutes(job.elapsed)} elapsed`,
+               fraction: job.steps ? job.step / job.steps : null });
+      }
+      pollTimer = setTimeout(poll, 2000);
+    };
+    poll();
+  }
+
+  const resume = store.get(`job:${service}`);
+  if (resume) { show({ stage: "Reconnecting to your job", meta: "" }); track(resume); }
+  return el;
+}
+
+// ── tabs ────────────────────────────────────────────────────────────────────
+const panels = document.getElementById("panels");
+for (const s of Object.keys(SERVICES)) panels.append(makePanel(s));
+function selectTab(name) {
+  document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  document.querySelectorAll("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== name);
+  store.set("tab", name);
+}
+document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => selectTab(b.dataset.tab)));
+selectTab(SERVICES[store.get("tab")] ? store.get("tab") : "replace");
+
+// ── backend status ──────────────────────────────────────────────────────────
+// Polled so a tab shows as offline before anyone presses Generate.
+async function pollStatus() {
+  try {
+    const st = await (await fetch("/api/status")).json();
+    for (const [name, s] of Object.entries(st)) {
+      document.querySelectorAll(`[data-dot="${name}"], [data-panel="${name}"] .status .dot`)
+        .forEach(d => d.className = `dot ${s.state}`);
+      const t = document.querySelector(`[data-panel="${name}"] .status-text`);
+      t.innerHTML = "";
+      const b = document.createElement("b"); b.textContent = s.label;
+      t.append(b, ` — ${s.detail}`);
+    }
+  } catch {}
+  setTimeout(pollStatus, 15000);
+}
+pollStatus();
+</script>
+</body>
+</html>

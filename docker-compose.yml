@@ -1,9 +1,9 @@
 ##############################################################################
-#  cy_hia — one Gradio UI over two GPU ComfyUI backends
+#  cy_hia — one HTML UI over two GPU ComfyUI backends
 #
 #    comfy-replace   GPU 0   SCAIL-2 replacement      ComfyUI :8136 (internal)
 #    comfy-animate   GPU 1   WAN 2.2 Animate          ComfyUI :8134 (internal)
-#    gradio-ui       ---     the only published port          :7860
+#    ui              ---     the only published port          :7860
 #
 #  The two backends run ComfyUI *only*. The UI is a separate container, so it
 #  can be restarted without evicting models from either GPU.
@@ -143,7 +143,7 @@ services:
   # ══════════════════════════════════════════════════════════════════════════
   # The UI — no GPU. Phase 5.
   # ══════════════════════════════════════════════════════════════════════════
-  gradio-ui:
+  ui:
     build:
       context: ./docker
       dockerfile: Dockerfile.ui
@@ -159,8 +159,8 @@ services:
       # Service names on the cyhia network, so the UI needs no host ports.
       ANIMATE_URL: "${ANIMATE_URL:-http://comfy-animate:8134}"
       REPLACE_URL: "${REPLACE_URL:-http://comfy-replace:8136}"
-      GRADIO_SERVER_NAME: "0.0.0.0"
-      GRADIO_SERVER_PORT: "7860"
+      UI_HOST: "0.0.0.0"
+      UI_PORT: "7860"
       OUT_DIR: "/app/outputs"
 
     volumes:

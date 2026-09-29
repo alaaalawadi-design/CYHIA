@@ -1,14 +1,14 @@
 # cy_hia
 
-One Gradio UI over two ComfyUI backends, one GPU each. Both GPUs are 32 GB RTX 5090s.
+One HTML UI over two ComfyUI backends, one GPU each. Both GPUs are 32 GB RTX 5090s.
 
 | Service | GPU | ComfyUI port | Workflow | What it does |
 |---|---|---|---|---|
 | `comfy-replace` | **0** | 8136 | `workflows/replace_workflow.json` | SCAIL-2 character replacement |
 | `comfy-animate` | **1** | 8134 | `workflows/animate_workflow.json` | WAN 2.2 Animate |
-| `gradio-ui` | none | **7860** (the only published port) | — | both tabs |
+| `ui` | none | **7860** (the only published port) | — | both tabs |
 
-The backends run **ComfyUI only** — no Gradio inside them. That is the point of the split: the
+The backends run **ComfyUI only** — no UI inside them. That is the point of the split: the
 UI can be restarted without evicting ~15 GB of weights from either GPU.
 
 ## Two separate ComfyUI installs — do not merge them
@@ -44,7 +44,8 @@ are **core** nodes, not custom ones — that surprises people.
 ```
 app/comfy_client.py   ComfyClient — one instance per backend (upload, submit, ws progress, /history)
 app/workflows.py      Adapter per service: owns node ids, patches inputs, randomises seeds
-app/ui.py             Gradio Blocks, two tabs
+app/server.py         FastAPI: in-memory jobs, one worker thread per backend, /api/*
+app/static/index.html the whole front end — plain HTML/CSS/JS, no build step, no CDN
 scripts/harden_replace_workflow.py   src workflow -> service workflow (declarative + validated)
 scripts/gen_requirements.py          derives docker/requirements-lock.txt
 scripts/smoke.py                     one end-to-end job, either service; --check-only
@@ -107,7 +108,7 @@ Derive the list from ComfyUI itself rather than guessing, via `python_module` in
 ```bash
 docker compose build comfy-replace          # ~45 min, see note below
 docker compose up -d comfy-replace          # GPU 0
-docker compose up -d                        # + the UI on :7860
+docker compose up -d --remove-orphans      # + the UI on :7860 (service `ui`; was `gradio-ui`)
 docker compose --profile phase3 up -d comfy-animate   # GPU 1
 docker compose logs -f comfy-replace
 ```
@@ -178,7 +179,8 @@ python3 scripts/smoke.py --service replace --url http://127.0.0.1:8136 \
 ```
 
 Use `--frames 49` (4n+1 keeps the Wan latent aligned) for a ~6 min run instead of ~65 min.
-Run these with a venv that has `httpx`, `websocket-client` and `gradio` — `../venv/bin/python`.
+Run these with a venv that has `httpx` and `websocket-client` — `../venv/bin/python` (it also has
+`fastapi`/`uvicorn`, so `python -m app.server` runs the UI outside Docker).
 
 ## Timings (measured, 49-frame runs)
 
@@ -190,12 +192,16 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
 
 ## Conventions
 
-- **Gradio 6.13** — `launch(show_api=...)` was removed; it raises `TypeError`.
+- The UI is **not Gradio** (replaced 2026-09-29). `app/server.py` + `app/static/index.html`; the page
+  uploads with XHR, then polls `/api/jobs/{id}` every 2 s. The page keeps its job id in
+  `localStorage`, so a reload reconnects. Jobs are in memory: restarting the UI container forgets
+  them (ComfyUI still finishes, the output stays in that backend's `data/*/output`).
 - The UI shows **stage name + elapsed minutes, not a percentage** — ~100 nodes of uneven cost mean
   any fraction would be a lie.
 - The UI must start even when a backend is down (`condition: service_started`, not
   `service_healthy`), so one dead GPU service never takes the other tab offline.
-- `concurrency_limit=1` per tab: one GPU each.
+- One job at a time per backend (a single-worker executor each): one GPU each. At most 10
+  waiting per backend.
 - Results are fetched over `/view`, never through a shared filesystem, so the UI container needs no
   mounts from the backends.
 - Uploads get UUID filenames; the two backends have separate `input/` dirs.

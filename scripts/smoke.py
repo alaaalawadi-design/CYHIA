@@ -3,7 +3,7 @@
 Run one job end to end against a ComfyUI instance, for either service.
 
 Used to prove a backend container actually works: it exercises the same client,
-adapter and workflow the Gradio app will use, so a pass here means the only
+adapter and workflow the UI will use, so a pass here means the only
 untested layer left is the UI itself.
 
   python3 scripts/smoke.py --service replace --url http://127.0.0.1:8136 \

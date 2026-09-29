@@ -3,7 +3,7 @@
 Harden the SCAIL-2 character-replacement workflow for unattended service use.
 
 Input :  workflows/replace_workflow_src.json   (exported as-is from ComfyUI)
-Output:  workflows/replace_workflow.json       (what the Gradio service loads)
+Output:  workflows/replace_workflow.json       (what the UI service loads)
 
 The source graph was built interactively, so it carries three kinds of baggage
 that hurt a long-running service:
