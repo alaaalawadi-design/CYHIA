@@ -4,44 +4,64 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CYHIA — Human Image Animation</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2718%27 fill=%27%2305050d%27/%3E%3Cpath d=%27M50 20L24 50l26 30h12L36 50l26-30z%27 fill=%27%23d4400a%27/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2718%27 fill=%27%23ffffff%27/%3E%3Cpath d=%27M50 20L24 50l26 30h12L36 50l26-30z%27 fill=%27%233a59d9%27/%3E%3C/svg%3E">
 <style>
-  /* Palette from the CYHIA logo: black, deep navy, red -> orange chevron. */
+  /* Tokens taken from cywaf.com (Cyshield brand): blue #1C1998, red #BC0424, light surfaces,
+     red->blue "AI gradient". No web font: this UI loads nothing from a CDN. */
   :root {
-    --bg: #f4f4f8; --panel: #ffffff; --text: #11123a; --muted: #5b5d80;
-    --line: #dcdcea; --accent: #d4400a; --accent-2: #c0071c; --accent-text: #fff;
-    --brand: #1b1c55; --wordmark: #1b1c55; --hero: #ffffff;
-    --ok: #2f8f4e; --busy: #c28a12; --bad: #c0071c; --err-bg: #fbe9ec;
+    --bg: #f7f7fb; --panel: #ffffff; --panel-2: #f0f1f9; --text: #1b1a1a; --muted: #55566a;
+    --line: rgba(28,25,152,.10); --line-strong: rgba(28,25,152,.22);
+    --accent: #1c1998; --accent-hover: #2621b8; --accent-text: #fff; --red: #bc0424;
+    --wordmark: #1c1998;
+    --gradient: linear-gradient(90deg, #e84a63 0%, #bc0424 28%, #3a59d9 65%, #1c1998 100%);
+    --shadow: 0 8px 24px rgba(28,25,152,.08), 0 2px 6px rgba(28,25,152,.04);
+    --ok: #106945; --busy: #b9791f; --bad: #bc0424; --err-bg: #fbe9ec;
+    --nav-bg: rgba(255,255,255,.82);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #05050d; --panel: #0d0e26; --text: #e8e8f6; --muted: #8f91bd;
-      --line: #23245a; --accent: #f0621a; --accent-2: #e01430; --accent-text: #fff;
-      --brand: #1b1c55; --wordmark: #d9daf5; --hero: #0a0b1f;
-      --ok: #52b872; --busy: #f0a93a; --bad: #ff6b7d; --err-bg: #3a0f1a;
+      --bg: #0b0a26; --panel: #12103e; --panel-2: #0e0d33; --text: #ececfa; --muted: #9c9dc8;
+      --line: rgba(127,162,244,.14); --line-strong: rgba(127,162,244,.3);
+      --accent: #3a59d9; --accent-hover: #5b8aff; --accent-text: #fff; --red: #e84a63;
+      --wordmark: #ffffff;
+      --shadow: 0 8px 24px rgba(0,0,0,.35);
+      --ok: #6ed9a4; --busy: #e6a451; --bad: #ff6b7d; --err-bg: #3a0f1a;
+      --nav-bg: rgba(18,16,62,.82);
     }
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0; color: var(--text); min-height: 100vh;
+    font: 15px/1.55 "Geist", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(58,89,217,.10), transparent 60%),
+      radial-gradient(900px 600px at -10% 30%, rgba(188,4,36,.06), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
   }
-  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 12px 16px 48px; }
   header.brand {
-    display: flex; align-items: center; gap: 16px; margin: 0 0 22px; padding: 14px 20px;
-    background: var(--hero); border: 1px solid var(--line); border-radius: 12px;
-    border-left: 4px solid var(--accent);
+    display: flex; align-items: center; gap: 16px; margin: 0 0 32px; padding: 10px 22px;
+    background: var(--nav-bg); border: 1px solid var(--line); border-radius: 999px;
+    backdrop-filter: saturate(160%) blur(18px); box-shadow: var(--shadow);
   }
-  header.brand svg { height: 56px; width: auto; display: block; flex: none; }
-  .sub { color: var(--muted); margin: 0; }
+  header.brand svg { height: 48px; width: auto; display: block; flex: none; }
+  header.brand::after { content: ""; order: 3; }
+  .sub { color: var(--muted); margin: 0; font-size: 14px; }
+  .hero { margin: 0 0 28px; }
+  .hero h1 { font-size: clamp(28px, 4vw, 42px); letter-spacing: -.02em; line-height: 1.08; font-weight: 600; margin: 0 0 10px; }
+  .hero h1 span { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--muted); margin: 0; max-width: 62ch; }
 
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+  .tabs { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 22px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
   .tabs button {
-    font: inherit; background: none; border: 0; color: var(--muted); cursor: pointer;
-    padding: 10px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
-    display: flex; align-items: center; gap: 8px;
+    font: inherit; font-weight: 500; font-size: 14px; background: none; border: 0; color: var(--muted); cursor: pointer;
+    padding: 8px 18px; border-radius: 999px; display: flex; align-items: center; gap: 8px;
+    transition: background .15s, color .15s;
   }
-  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button[aria-selected="true"] { color: #fff; background: var(--accent); font-weight: 600; box-shadow: 0 10px 30px -12px var(--accent); }
 
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
   .dot.ready { background: var(--ok); } .dot.busy { background: var(--busy); } .dot.offline { background: var(--bad); }
@@ -52,12 +72,12 @@
 
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; min-width: 0; box-shadow: var(--shadow); }
 
   .drop {
-    display: block; position: relative; border: 1.5px dashed var(--line); border-radius: 8px;
+    display: block; position: relative; border: 1.5px dashed var(--line-strong); border-radius: 8px;
     min-height: 200px; margin-bottom: 14px; cursor: pointer; overflow: hidden;
-    background: var(--bg);
+    background: var(--panel-2);
   }
   .drop:hover { border-color: var(--accent); }
   .drop.over { border-color: var(--accent); }
@@ -78,25 +98,45 @@
   .label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 
   .go {
-    width: 100%; font: inherit; font-weight: 600; padding: 11px; border: 0; border-radius: 8px;
-    background: linear-gradient(90deg, var(--accent-2), var(--accent)); color: var(--accent-text); cursor: pointer;
+    width: 100%; font: inherit; font-weight: 600; padding: 13px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
+    background: var(--accent); color: var(--accent-text); cursor: pointer;
+    box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 10px 30px -10px var(--accent);
+    transition: transform .15s, background .15s;
   }
-  .go:not(:disabled):hover { filter: brightness(1.12); }
+  .go:not(:disabled):hover { transform: translateY(-1px); background: var(--accent-hover); }
   .go:disabled { opacity: .5; cursor: not-allowed; }
 
-  .result video { width: 100%; max-height: 580px; background: #000; border-radius: 6px; display: block; }
+  .result video { width: 100%; max-height: 580px; background: #000; border-radius: 10px; display: block; }
   .empty { color: var(--muted); min-height: 200px; display: flex; align-items: center; justify-content: center; text-align: center; }
   .progress { margin: 0 0 12px; font-size: 14px; }
   .progress .stage { font-weight: 600; }
   .progress .meta { color: var(--muted); }
   .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 8px; }
-  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); width: 0; transition: width .2s; }
+  .bar > i { display: block; height: 100%; background: var(--gradient); width: 0; transition: width .2s; }
   /* Indeterminate: no honest overall fraction exists for a ~100-node graph. */
   .bar.spin > i { width: 30%; animation: slide 1.4s ease-in-out infinite; }
   @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
   @media (prefers-reduced-motion: reduce) { .bar.spin > i { animation: none; width: 100%; opacity: .4; } }
   .error { background: var(--err-bg); color: var(--bad); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; overflow-wrap: anywhere; }
   .dl { display: inline-block; margin-top: 10px; color: var(--accent); }
+  .guide { margin: 0 0 20px; }
+  .guide > summary {
+    cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px;
+  }
+  .guide > summary::-webkit-details-marker { display: none; }
+  .guide > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+  .guide[open] > summary::before { transform: rotate(90deg); }
+  .guide .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; margin-top: 14px; }
+  .guide h3 { font-size: 13px; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .guide ul { margin: 0; padding: 0; list-style: none; }
+  .guide li { padding-left: 22px; position: relative; margin-bottom: 6px; font-size: 14px; }
+  .guide li::before { position: absolute; left: 0; font-weight: 700; }
+  .guide .do li::before { content: "✓"; color: var(--ok); }
+  .guide .avoid li::before { content: "✕"; color: var(--bad); }
+  .guide .limits { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .guide .limits td { padding: 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .guide .limits td:first-child { color: var(--muted); padding-right: 12px; white-space: nowrap; }
+  .guide .tip { margin: 14px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); font-size: 14px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -104,13 +144,17 @@
 <main>
   <header class="brand">
     <svg viewBox="0 0 560 120" role="img" aria-label="CYHIA — Human Image Animation">
-      <path d="M40 16 L14 60 L40 104 L58 104 L32 60 L58 16Z" fill="#c0071c"/>
-      <path d="M62 8 L30 60 L62 112 L86 112 L54 60 L86 8Z" fill="#d4400a"/>
+      <path d="M40 16 L14 60 L40 104 L58 104 L32 60 L58 16Z" fill="#bc0424"/>
+      <path d="M62 8 L30 60 L62 112 L86 112 L54 60 L86 8Z" fill="#3a59d9"/>
       <text x="104" y="84" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="800" font-size="84" letter-spacing="2" fill="var(--wordmark)">CYHIA</text>
       <text x="108" y="112" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="600" font-size="15" letter-spacing="4.5" fill="var(--muted)">HUMAN IMAGE ANIMATION</text>
     </svg>
-    <p class="sub">Replace characters and animate images, on two GPUs, in one place.</p>
   </header>
+
+  <section class="hero">
+    <h1>Human image animation, <span>on your own GPUs.</span></h1>
+    <p>Replace a character in a video, or animate a still image from a driving video, from one interface.</p>
+  </section>
 
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="replace" aria-selected="true"><span class="dot" data-dot="replace"></span>Replace character</button>
@@ -121,6 +165,15 @@
     <section class="panel" role="tabpanel">
       <div class="status"><span class="dot"></span><span class="status-text">Checking…</span></div>
       <p class="blurb"></p>
+      <details class="card guide" open>
+        <summary>Input guide: how to choose your image and video</summary>
+        <div class="cols">
+          <div><h3>Reference image</h3><ul class="do img-do"></ul><ul class="avoid img-avoid" style="margin-top:8px"></ul></div>
+          <div><h3>Driving video</h3><ul class="do vid-do"></ul><ul class="avoid vid-avoid" style="margin-top:8px"></ul></div>
+          <div><h3>Limits</h3><table class="limits"></table></div>
+        </div>
+        <p class="tip"></p>
+      </details>
       <div class="grid">
         <div class="card">
           <div class="label">Reference character (image)</div>
@@ -173,11 +226,64 @@ const store = {
 
 const minutes = s => s < 60 ? `${Math.round(s)} s` : `${(s / 60).toFixed(1)} min`;
 
+const GUIDE = {
+  replace: {
+    imgDo: ["One person, clearly visible, face and body in frame",
+            "Similar framing to the video (full body for a full-body video, half body for a half body)",
+            "Sharp and evenly lit; the face and outfit are copied from here",
+            "Roughly the same body shape and pose direction as the person you are replacing"],
+    imgAvoid: ["Several people, heavy filters or strong shadows across the face",
+               "Sunglasses, masks or hands covering the face",
+               "Tiny or heavily cropped subjects, very low resolution"],
+    vidDo: ["The person you want replaced is the main subject and the closest to the camera",
+            "Fixed or slowly moving camera, the whole body visible for most of the clip",
+            "Good lighting and little motion blur, so the pose can be read",
+            "Original audio is kept and returned with the result"],
+    vidAvoid: ["Crowds: other people are removed, but only the main person is tracked (up to 5 are detected)",
+               "Fast cuts and scene changes; use a single continuous shot",
+               "Objects held in hand: they are removed, so avoid clips where the prop matters",
+               "Heavy occlusion or the subject leaving the frame"],
+    limits: [["Image", "PNG, JPG, JPEG, WebP or BMP"],
+             ["Video", "MP4, MOV, WebM, MKV, AVI or M4V"],
+             ["Frame rate", "Resampled to 24 fps"],
+             ["Length", "Up to 1140 frames (about 47 s at 24 fps); longer clips are cut off"],
+             ["Time", "About 3 min plus roughly 3.3 s per frame: a full 1140-frame clip takes 65–70 min"]],
+    tip: "First time? Trim the driving video to a few seconds. A 49-frame test takes about 6 minutes and shows whether the image and video pair well before you commit to an hour-long run.",
+  },
+  animate: {
+    imgDo: ["One character, front or three-quarter view, face clearly visible",
+            "Sharp, evenly lit, uncluttered background",
+            "Pose and framing close to the first frame of the driving video",
+            "Enough of the body in the image for the motion you want (full body for dancing or walking)"],
+    imgAvoid: ["Several people or a face that is small, blurred or covered",
+               "A pose very different from the video's opening pose",
+               "Heavy stylisation that hides anatomy"],
+    vidDo: ["One person performing the motion, whole body in frame",
+            "Steady camera and a plain, well-lit scene",
+            "Clear limb and face movement; the video's motion and expression are transferred",
+            "Portrait or landscape matching the image gives the cleanest result"],
+    vidAvoid: ["Several people in shot", "Cuts, zooms and fast camera moves",
+               "Motion blur or dark footage", "Limbs leaving the frame"],
+    limits: [["Image", "PNG, JPG, JPEG, WebP or BMP"],
+             ["Video", "MP4, MOV, WebM, MKV, AVI or M4V"],
+             ["Frame rate", "Resampled to 24 fps"],
+             ["Length", "Up to 240 frames (about 10 s at 24 fps); longer clips are cut off"],
+             ["Time", "About 6 minutes for a 49-frame clip; a full 240-frame clip takes longer"]],
+    tip: "The output is the character from your image performing the video's motion. Choose the video for its motion and the image for its identity; the video's background is not carried over.",
+  },
+};
+
 function makePanel(service) {
   const el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
   el.dataset.panel = service;
   el.querySelector(".blurb").textContent = SERVICES[service];
   const $ = s => el.querySelector(s);
+  const g = GUIDE[service];
+  const fill = (sel, items) => items.forEach(t => { const li = document.createElement("li"); li.textContent = t; $(sel).append(li); });
+  fill(".img-do", g.imgDo); fill(".img-avoid", g.imgAvoid);
+  fill(".vid-do", g.vidDo); fill(".vid-avoid", g.vidAvoid);
+  g.limits.forEach(([k, v]) => { const tr = $(".limits").insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; });
+  $(".tip").textContent = g.tip;
   const files = { image: null, video: null };
   const go = $(".go");
   let busy = false, pollTimer = null;
