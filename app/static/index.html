@@ -151,6 +151,15 @@
   .case figure.wide figcaption { color: var(--accent); }
   .case img, .case video { width: 100%; max-height: 260px; object-fit: contain; background: #000; border-radius: 8px; display: block; }
   .case figure.wide video { max-height: 420px; }
+  #history .hist-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #history h2 { font-size: 22px; letter-spacing: -.02em; margin: 0; }
+  .hist-sub { color: var(--muted); margin: 4px 0 16px; }
+  #hist-filter { font: inherit; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); color: var(--accent); border: 1px solid var(--line-strong); }
+  .badge.animate { color: var(--red); }
+  .case .meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .case .meta-row a { margin-left: auto; color: var(--accent); }
+  .case .fname { overflow-wrap: anywhere; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -173,6 +182,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="replace" aria-selected="true"><span class="dot" data-dot="replace"></span>Replace character</button>
     <button role="tab" data-tab="animate" aria-selected="false"><span class="dot" data-dot="animate"></span>Animate</button>
+    <button role="tab" data-tab="history" aria-selected="false">History</button>
   </nav>
 
   <template id="panel-tpl">
@@ -221,6 +231,18 @@
     </section>
   </template>
   <div id="panels"></div>
+
+  <section id="history" hidden>
+    <div class="hist-head">
+      <h2>Previous runs</h2>
+      <select id="hist-filter" aria-label="Filter by service">
+        <option value="">All services</option><option value="replace">Replace</option><option value="animate">Animate</option>
+      </select>
+    </div>
+    <p class="hist-sub">Every finished result stored by this UI, newest first. Kept on disk, so it survives a restart.</p>
+    <div class="cases" id="hist-list"></div>
+    <p class="empty" id="hist-empty" hidden>No finished runs yet.</p>
+  </section>
 
   <section class="gallery" id="gallery" hidden>
     <h2>Gallery</h2>
@@ -471,14 +493,44 @@ async function loadGallery(service) {
   }
 }
 
+let history = [];
+async function loadHistory() {
+  try { history = await (await fetch("/api/history")).json(); } catch { history = []; }
+  renderHistory();
+}
+function renderHistory() {
+  const want = document.getElementById("hist-filter").value;
+  const rows = history.filter(r => !want || r.service === want);
+  const list = document.getElementById("hist-list");
+  list.replaceChildren();
+  document.getElementById("hist-empty").hidden = rows.length > 0;
+  for (const r of rows) {
+    const card = document.createElement("article"); card.className = "card case";
+    const row = document.createElement("div"); row.className = "meta-row";
+    const b = document.createElement("span"); b.className = `badge ${r.service}`; b.textContent = r.service;
+    const when = document.createElement("span"); when.textContent = new Date(r.finished * 1000).toLocaleString();
+    const size = document.createElement("span"); size.textContent = `${(r.size / 1048576).toFixed(1)} MB`;
+    const dl = document.createElement("a"); dl.href = r.url; dl.download = r.name; dl.textContent = "Download";
+    row.append(b, when, size, dl);
+    const name = document.createElement("p"); name.className = "note fname"; name.textContent = r.name;
+    const v = document.createElement("video");
+    v.src = r.url; v.controls = true; v.playsInline = true; v.preload = "metadata";
+    card.append(row, name, v); list.append(card);
+  }
+}
+document.getElementById("hist-filter").addEventListener("change", renderHistory);
+
 function selectTab(name) {
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
   document.querySelectorAll("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== name);
+  const isHist = name === "history";
+  document.getElementById("history").hidden = !isHist;
+  if (isHist) { document.getElementById("gallery").hidden = true; loadHistory(); }
+  else loadGallery(name);
   store.set("tab", name);
-  loadGallery(name);
 }
 document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => selectTab(b.dataset.tab)));
-selectTab(SERVICES[store.get("tab")] ? store.get("tab") : "replace");
+selectTab(SERVICES[store.get("tab")] || store.get("tab") === "history" ? store.get("tab") : "replace");
 
 // ── backend status ──────────────────────────────────────────────────────────
 // Polled so a tab shows as offline before anyone presses Generate.

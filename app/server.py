@@ -26,11 +26,13 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .mp4 import faststart
 from .comfy_client import ComfyClient, ComfyError, ComfyTimeout
 from .workflows import ANIMATE, REPLACE, Adapter
 
@@ -161,6 +163,7 @@ def _execute(job: Job) -> None:
 
         job.stage, job.step, job.steps = "Downloading result", 0, 0
         job.result = Path(client.download(finals[0], OUT_DIR / job.service))
+        faststart(job.result)            # so the browser can start playing at once
         job.state, job.stage = "done", "Done"
     except ComfyTimeout as e:
         job.state, job.error = "error", f"Timed out: {e}"
@@ -287,6 +290,33 @@ def gallery() -> dict:
     return _gallery()
 
 
+@app.get("/api/history")
+def history() -> list[dict]:
+    """Every finished result on disk, newest first. Read from OUT_DIR rather than
+    JOBS, so it survives a restart of the UI container."""
+    rows = []
+    for service in BACKENDS:
+        for f in (OUT_DIR / service).glob("*"):
+            if f.is_file() and f.suffix.lower() in VIDEO_EXT:
+                st = f.stat()
+                rows.append({"service": service, "name": f.name, "size": st.st_size,
+                             "finished": st.st_mtime,
+                             "url": f"/api/history/{service}/{quote(f.name)}"})
+    return sorted(rows, key=lambda r: r["finished"], reverse=True)
+
+
+@app.get("/api/history/{service}/{name}")
+def history_video(service: str, name: str):
+    if service not in BACKENDS:
+        raise HTTPException(404, f"Unknown service '{service}'.")
+    root = (OUT_DIR / service).resolve()
+    f = (root / name).resolve()
+    if f.parent != root or not f.is_file() or f.suffix.lower() not in VIDEO_EXT:
+        raise HTTPException(404, "No such result.")
+    return FileResponse(f, media_type="video/mp4", filename=f.name,
+                        content_disposition_type="inline")
+
+
 @app.get("/")
 def index():
     return FileResponse(STATIC_DIR / "index.html")
@@ -301,6 +331,11 @@ def main():
     import uvicorn
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for f in OUT_DIR.glob("*/*.mp4"):    # results saved before faststart was added
+        try:
+            faststart(f)
+        except (OSError, ValueError) as e:
+            print(f"faststart skipped for {f.name}: {e}")
     for name, client in BACKENDS.items():
         print(f"{name:>8}: {client.base_url}  {'up' if client.is_up() else 'DOWN'}")
     uvicorn.run(app, host=os.environ.get("UI_HOST", "0.0.0.0"),
