@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  cy_hia UI — Gradio front end for both GPU backends
+#
+#  No GPU, no CUDA, no models: this container only speaks HTTP to the two
+#  ComfyUI services. That is the point of splitting it out — the UI can be
+#  restarted or redeployed without evicting ~15 GB of weights from either GPU.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    OUT_DIR=/app/outputs
+
+# ffmpeg: Gradio probes uploaded video before handing it on.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-ui.txt /tmp/requirements-ui.txt
+RUN pip install -r /tmp/requirements-ui.txt && rm /tmp/requirements-ui.txt
+
+WORKDIR /app
+# app/ and workflows/ are bind-mounted in compose so the UI can be edited
+# without a rebuild; created here so the image runs standalone too.
+RUN mkdir -p /app/app /app/workflows /app/outputs
+
+EXPOSE 7860
+CMD ["python", "-m", "app.ui"]

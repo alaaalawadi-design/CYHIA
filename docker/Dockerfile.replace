@@ -1,0 +1,104 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  SCAIL-2 character replacement — ComfyUI backend (GPU 1)
+#
+#  Carries: OS packages, Python 3.12, the 399 pinned packages the workflow was
+#  validated against, and ComfyUI v0.27.0 itself.
+#  Mounted at run time: the models, and the 7 custom node directories.
+#
+#  The ComfyUI core in nouran_Rep is stock upstream v0.27.0 — verified by
+#  checksum against the upstream tag, including comfy_extras/nodes_scail.py and
+#  nodes_sam3.py, which provide SCAIL2ColoredMask and SAM3_VideoTrack as *core*
+#  nodes rather than custom ones. Only that install's custom_nodes and user
+#  directories are under private version control, and those are mounted, so
+#  nothing here needs a credential.
+#
+#  Python 3.12 and torch 2.11.0+cu130 match the working venv exactly; the RTX
+#  5090 (sm_120) needs a CUDA 13 build.
+# ─────────────────────────────────────────────────────────────────────────────
+# runtime, not devel: nothing in requirements-lock.txt builds from source, and
+# no node compiles kernels at run time, so the ~4 GB devel image (nvcc, headers)
+# buys nothing. It does still carry cuDNN, which onnxruntime-gpu needs for the
+# DWPose ONNX models. Docker Hub pulls at ~1 MB/s here, so base size is the
+# single biggest factor in build time.
+FROM nvidia/cuda:13.0.1-cudnn-runtime-ubuntu24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    CUDA_HOME=/usr/local/cuda
+ENV PATH="${CUDA_HOME}/bin:${PATH}"
+
+# Everything the models need is mounted; nothing should reach the network at
+# run time. A stray download would otherwise stall the first job for minutes.
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_HOME=/app/ComfyUI/models/LLM/.hf \
+    COMFYUI_MANAGER_NO_DEPS_CHECK=1
+
+# libgl/libglib: opencv. ffmpeg: VHS video load/combine and the audio muxing
+# that produces the side-by-side output.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-dev python3.12-venv \
+        git curl ca-certificates \
+        ffmpeg \
+        libgl1 libglib2.0-0 libsm6 libxrender1 libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# A venv, not the system interpreter. Ubuntu 24.04 ships an externally-managed
+# Python whose Debian-packaged pip has no RECORD file, so `pip install
+# --upgrade pip` fails outright with "Cannot uninstall pip 24.0". A venv owns
+# its own pip, needs no --break-system-packages, and matches the venv this
+# dependency set was locked from.
+RUN python3.12 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
+
+# Torch first, from the CUDA 13.0 index, so the pinned set below resolves
+# against it rather than pulling a default-index build.
+RUN pip install --upgrade pip \
+    && pip install \
+        torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 \
+        --index-url https://download.pytorch.org/whl/cu130
+
+COPY requirements-lock.txt /tmp/requirements-lock.txt
+# --no-deps because this file is already a complete, pinned closure generated
+# from the validated venv (scripts/gen_requirements.py). Letting pip re-resolve
+# fails: the source venv is internally inconsistent -- it has rembg 2.0.75,
+# which demands pillow>=12.1.0, alongside pillow 11.3.0. That combination works
+# at run time (version metadata is not enforced on import) but no resolver will
+# produce it. --no-deps reproduces the validated environment exactly, and skips
+# the backtracking entirely.
+#
+# `pip check` reports that same inconsistency; it is printed for visibility and
+# deliberately not fatal. A genuinely missing transitive dependency surfaces as
+# an IMPORT FAILED when ComfyUI starts, which smoke.py --check-only catches.
+RUN pip install --no-deps -r /tmp/requirements-lock.txt \
+    && rm /tmp/requirements-lock.txt \
+    && (pip check || true)
+
+# Corrects the HF_HOME set above, which pointed into models/ — that is a
+# read-only mount at run time, and the huggingface libraries still touch their
+# cache directory even with downloads disabled. Set here rather than above so
+# that editing it cannot invalidate the multi-gigabyte pip layers.
+# (The QwenVL node finds its weights through folder_paths, not through HF.)
+ENV HF_HOME=/app/hf
+
+# ComfyUI last: it changes far more often than the dependency set above, and
+# this way editing the pin does not re-run the multi-gigabyte pip layers.
+# Pinned to the tag, not a branch, so a rebuild cannot silently move versions.
+ARG COMFYUI_REF=v0.27.0
+RUN git clone --depth 1 --branch "${COMFYUI_REF}" \
+        https://github.com/comfyanonymous/ComfyUI.git /app/ComfyUI \
+    && rm -rf /app/ComfyUI/.git
+
+# custom_nodes and models are bind-mounted over these at run time; creating
+# them keeps ComfyUI happy if a mount is ever omitted, and the entrypoint
+# checks for the real content.
+RUN mkdir -p /app/ComfyUI/custom_nodes /app/ComfyUI/models \
+             /app/ComfyUI/input /app/ComfyUI/output /app/ComfyUI/temp /app/hf
+
+COPY entrypoint-comfy.sh /app/entrypoint-comfy.sh
+RUN chmod +x /app/entrypoint-comfy.sh
+
+WORKDIR /app/ComfyUI
+EXPOSE 8136
+ENTRYPOINT ["/app/entrypoint-comfy.sh"]

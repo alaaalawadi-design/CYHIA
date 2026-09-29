@@ -1,0 +1,8 @@
+# Runtime bind-mount targets: ComfyUI inputs, generated videos, temp, settings.
+data/
+
+# Local overrides for REP_ROOT / WAN_ROOT / UI_PORT.
+.env
+
+__pycache__/
+*.py[cod]

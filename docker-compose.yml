@@ -1,0 +1,182 @@
+##############################################################################
+#  cy_hia — one Gradio UI over two GPU ComfyUI backends
+#
+#    comfy-replace   GPU 0   SCAIL-2 replacement      ComfyUI :8136 (internal)
+#    comfy-animate   GPU 1   WAN 2.2 Animate          ComfyUI :8134 (internal)
+#    gradio-ui       ---     the only published port          :7860
+#
+#  The two backends run ComfyUI *only*. The UI is a separate container, so it
+#  can be restarted without evicting models from either GPU.
+#
+#  This file does not touch comfyui-wan-docker/docker-compose.yml, which stays
+#  as the rollback path. That old stack occupies GPU 1 and binds 8135/7835, so
+#  it must be stopped before comfy-animate can start — but comfy-replace on
+#  GPU 0 runs alongside it untouched.
+#
+#    docker compose up -d comfy-replace     # backend only, for testing
+#    docker compose up -d                   # everything
+#    docker compose logs -f comfy-replace
+##############################################################################
+
+x-comfy-common: &comfy-common
+  restart: unless-stopped
+  # ComfyUI mmaps large safetensors; the default 64 MB /dev/shm is not enough.
+  shm_size: "32gb"
+  networks: [cyhia]
+  environment: &comfy-env
+    NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+    # Inside the container only one GPU is visible, so it is always cuda:0.
+    CUDA_DEVICE: "0"
+    PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+    # Everything is mounted; nothing should fetch weights at run time.
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+
+services:
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # GPU 0 — SCAIL-2 character replacement
+  #
+  # Image carries ComfyUI v0.27.0 and the pinned environment; the models and
+  # the 7 custom node dirs it needs are mounted from nouran_Rep.
+  # ══════════════════════════════════════════════════════════════════════════
+  comfy-replace:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.replace
+    image: scail-replace:latest
+    container_name: cyhia_comfy_replace
+    <<: *comfy-common
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+
+    environment:
+      <<: *comfy-env
+      NVIDIA_VISIBLE_DEVICES: "0"
+      COMFY_PORT: "8136"
+
+    # Uncomment to reach ComfyUI directly from the host while debugging.
+    # ports:
+    #   - "8136:8136"
+
+    volumes:
+      # ComfyUI v0.27.0 itself is baked into the image (stock upstream), so
+      # only the models and the private custom nodes come from the host.
+
+      # ── Models (read-only, shared with the host install) ──────────────────
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/models:/app/ComfyUI/models:ro
+
+      # ── Only the 7 custom node dirs this workflow needs ───────────────────
+      # Mounted individually rather than the whole 60-dir tree: the others
+      # would each need their own pip dependencies just to import, and two of
+      # them (ComfyUI-QwenVL vs -Mod) define the same class.
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/comfyui_controlnet_aux:/app/ComfyUI/custom_nodes/comfyui_controlnet_aux:ro
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite:/app/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite:ro
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/ComfyUI-KJNodes:/app/ComfyUI/custom_nodes/ComfyUI-KJNodes:ro
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/comfyui_essentials:/app/ComfyUI/custom_nodes/comfyui_essentials:ro
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/comfyui-scail2-infinity:/app/ComfyUI/custom_nodes/comfyui-scail2-infinity:ro
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/dwpose_retarget:/app/ComfyUI/custom_nodes/dwpose_retarget:ro
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/ComfyUI-QwenVL:/app/ComfyUI/custom_nodes/ComfyUI-QwenVL:ro
+
+      # ── Writable: this service's own input/output, not shared with animate ─
+      - ./data/replace/input:/app/ComfyUI/input
+      - ./data/replace/output:/app/ComfyUI/output
+      - ./data/replace/temp:/app/ComfyUI/temp
+      - ./data/replace/user:/app/ComfyUI/user
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8136/system_stats > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # Cold start loads a large custom node tree before the port answers.
+      start_period: 180s
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # GPU 1 — WAN 2.2 Animate  (Phase 3; reuses the existing wan-animate image)
+  # ══════════════════════════════════════════════════════════════════════════
+  comfy-animate:
+    image: wan-animate:latest
+    container_name: cyhia_comfy_animate
+    <<: *comfy-common
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
+
+    environment:
+      <<: *comfy-env
+      NVIDIA_VISIBLE_DEVICES: "1"
+      COMFY_PORT: "8134"
+
+    volumes:
+      - ${WAN_ROOT:-/home/administrator/Disk/nouran_wan22}/ComfyUI/models/diffusion_models:/app/ComfyUI/models/unet:ro
+      - ${WAN_ROOT:-/home/administrator/Disk/nouran_wan22}/ComfyUI/models/text_encoders:/app/ComfyUI/models/clip:ro
+      - ${WAN_ROOT:-/home/administrator/Disk/nouran_wan22}/ComfyUI/models/clip_vision:/app/ComfyUI/models/clip_vision:ro
+      - ${WAN_ROOT:-/home/administrator/Disk/nouran_wan22}/ComfyUI/models/vae:/app/ComfyUI/models/vae:ro
+      - ${WAN_ROOT:-/home/administrator/Disk/nouran_wan22}/ComfyUI/models/loras:/app/ComfyUI/models/loras:ro
+      - ${WAN_ROOT:-/home/administrator/Disk/nouran_wan22}/ComfyUI/models/detection:/app/ComfyUI/models/detection:ro
+      - ${WAN_ROOT:-/home/administrator/Disk/nouran_wan22}/ComfyUI/custom_nodes:/app/ComfyUI/custom_nodes:ro
+      - ./docker/entrypoint-comfy.sh:/app/entrypoint-comfy.sh:ro
+      - ./data/animate/input:/app/ComfyUI/input
+      - ./data/animate/output:/app/ComfyUI/output
+      - ./data/animate/temp:/app/ComfyUI/temp
+
+    entrypoint: ["/app/entrypoint-comfy.sh"]
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8134/system_stats > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # The UI — no GPU. Phase 5.
+  # ══════════════════════════════════════════════════════════════════════════
+  gradio-ui:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.ui
+    image: cyhia-ui:latest
+    container_name: cyhia_ui
+    restart: unless-stopped
+    networks: [cyhia]
+
+    ports:
+      - "${UI_PORT:-7860}:7860"
+
+    environment:
+      # Service names on the cyhia network, so the UI needs no host ports.
+      ANIMATE_URL: "${ANIMATE_URL:-http://comfy-animate:8134}"
+      REPLACE_URL: "${REPLACE_URL:-http://comfy-replace:8136}"
+      GRADIO_SERVER_NAME: "0.0.0.0"
+      GRADIO_SERVER_PORT: "7860"
+      OUT_DIR: "/app/outputs"
+
+    volumes:
+      # Mounted rather than baked: the UI can be edited and restarted in
+      # seconds without touching either GPU container.
+      - ./app:/app/app:ro
+      - ./workflows:/app/workflows:ro
+      - ./data/ui_outputs:/app/outputs
+
+    # Deliberately not `condition: service_healthy` on the backends: the UI
+    # shows a per-tab status badge and must come up even when one GPU service
+    # is down, so the other tab stays usable.
+    depends_on:
+      comfy-replace:
+        condition: service_started
+
+networks:
+  cyhia:
+    driver: bridge

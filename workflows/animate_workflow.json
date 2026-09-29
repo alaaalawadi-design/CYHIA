@@ -1,0 +1,692 @@
+{
+  "224": {
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "225": {
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "226": {
+    "inputs": {
+      "unet_name": "Wan2_2-Animate-14B_fp8_scaled_e4m3fn_KJ_v2.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "227": {
+    "inputs": {
+      "text": "cinematic quality, smooth natural motion, temporally consistent, photorealistic skin texture, sharp facial features, stable identity across frames, fluid cloth and hair physics, correct human anatomy, well-proportioned limbs, natural weight and inertia, seamless motion blur, professional lighting, high dynamic range, 4K detail, film grain, no jitter, no flickering",
+      "clip": [
+        "224",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "228": {
+    "inputs": {
+      "text": "static image, frozen pose, no motion, jitter, flickering frames, strobing, temporal inconsistency, identity drift, face morphing, face deformation, body distortion, extra limbs, missing limbs, fused fingers, extra fingers, melting skin, floating body parts, disconnected joints, broken spine, rubber limbs, warped proportions, oversized head, tiny hands, blurry motion, motion smear, ghosting artifacts, double exposure, watermark, text overlay, subtitles, logo, border, vignette, oversaturation, overexposure, underexposure, low quality, low resolution, jpeg artifacts, noise, grain overload, color banding, flat lighting, washed-out colors",
+      "clip": [
+        "224",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "255": {
+    "inputs": {
+      "shift": 8,
+      "model": [
+        "463",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Shift"
+    }
+  },
+  "269": {
+    "inputs": {
+      "samples": [
+        "387",
+        0
+      ],
+      "vae": [
+        "225",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "311": {
+    "inputs": {
+      "image": "frame_0001.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Upload a reference image"
+    }
+  },
+  "314": {
+    "inputs": {
+      "lora_name": "i2v_lightx2v_low_noise_model.safetensors",
+      "strength_model": 0.3,
+      "model": [
+        "226",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "315": {
+    "inputs": {
+      "lora_name": "wan2.2_animate_14B_relight_lora_bf16.safetensors",
+      "strength_model": 0.7,
+      "model": [
+        "314",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "317": {
+    "inputs": {
+      "clip_name": "clip_vision_h.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "Load CLIP Vision"
+    }
+  },
+  "324": {
+    "inputs": {
+      "seed": 146221682332677,
+      "steps": 6,
+      "cfg": 1,
+      "sampler_name": "euler_ancestral_cfg_pp",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "255",
+        0
+      ],
+      "positive": [
+        "370",
+        0
+      ],
+      "negative": [
+        "370",
+        1
+      ],
+      "latent_image": [
+        "370",
+        2
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "326": {
+    "inputs": {
+      "crop": "center",
+      "clip_vision": [
+        "317",
+        0
+      ],
+      "image": [
+        "311",
+        0
+      ]
+    },
+    "class_type": "CLIPVisionEncode",
+    "_meta": {
+      "title": "CLIP Vision Encode"
+    }
+  },
+  "330": {
+    "inputs": {
+      "value": [
+        "575",
+        2
+      ]
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Video Width"
+    }
+  },
+  "331": {
+    "inputs": {
+      "value": [
+        "575",
+        3
+      ]
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Video Height"
+    }
+  },
+  "368": {
+    "inputs": {
+      "color": "0, 0, 0",
+      "device": "cpu",
+      "image": [
+        "397",
+        0
+      ]
+    },
+    "class_type": "DrawMaskOnImage",
+    "_meta": {
+      "title": "Draw Mask On Image"
+    }
+  },
+  "370": {
+    "inputs": {
+      "width": [
+        "330",
+        0
+      ],
+      "height": [
+        "331",
+        0
+      ],
+      "length": [
+        "383",
+        0
+      ],
+      "batch_size": 1,
+      "continue_motion_max_frames": 4097,
+      "video_frame_offset": 0,
+      "positive": [
+        "227",
+        0
+      ],
+      "negative": [
+        "228",
+        0
+      ],
+      "vae": [
+        "225",
+        0
+      ],
+      "clip_vision_output": [
+        "326",
+        0
+      ],
+      "reference_image": [
+        "311",
+        0
+      ],
+      "face_video": [
+        "451",
+        1
+      ],
+      "pose_video": [
+        "456",
+        0
+      ]
+    },
+    "class_type": "WanAnimateToVideo",
+    "_meta": {
+      "title": "WanAnimateToVideo"
+    }
+  },
+  "383": {
+    "inputs": {
+      "value": [
+        "418",
+        6
+      ]
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Video Length In Frames (auto generated)"
+    }
+  },
+  "387": {
+    "inputs": {
+      "trim_amount": [
+        "370",
+        3
+      ],
+      "samples": [
+        "324",
+        0
+      ]
+    },
+    "class_type": "TrimVideoLatent",
+    "_meta": {
+      "title": "TrimVideoLatent"
+    }
+  },
+  "389": {
+    "inputs": {
+      "batch_index": [
+        "370",
+        4
+      ],
+      "length": 4096,
+      "image": [
+        "269",
+        0
+      ]
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Get Image from Batch"
+    }
+  },
+  "397": {
+    "inputs": {
+      "image": [
+        "412",
+        0
+      ]
+    },
+    "class_type": "ImagePass",
+    "_meta": {
+      "title": "ImagePass"
+    }
+  },
+  "407": {
+    "inputs": {},
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Convert Mask to Image"
+    }
+  },
+  "412": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": [
+        "330",
+        0
+      ],
+      "height": [
+        "331",
+        0
+      ],
+      "crop": "center",
+      "image": [
+        "417",
+        0
+      ]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Upscale Image"
+    }
+  },
+  "417": {
+    "inputs": {
+      "video": "silent2.mp4",
+      "force_rate": 24,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 240,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "AnimateDiff"
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Upload a reference video"
+    }
+  },
+  "418": {
+    "inputs": {
+      "video_info": [
+        "417",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "431": {
+    "inputs": {
+      "person_index": 0,
+      "pose_kps": [
+        "433",
+        1
+      ]
+    },
+    "class_type": "FaceMaskFromPoseKeypoints",
+    "_meta": {
+      "title": "Face Mask From Pose Keypoints"
+    }
+  },
+  "433": {
+    "inputs": {
+      "detect_hand": "disable",
+      "detect_body": "disable",
+      "detect_face": "enable",
+      "resolution": 512,
+      "bbox_detector": "yolox_l.onnx",
+      "pose_estimator": "dw-ll_ucoco_384_bs5.torchscript.pt",
+      "scale_stick_for_xinsr_cn": "disable",
+      "image": [
+        "311",
+        0
+      ]
+    },
+    "class_type": "DWPreprocessor",
+    "_meta": {
+      "title": "DWPose Estimator"
+    }
+  },
+  "434": {
+    "inputs": {
+      "images": [
+        "311",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "451": {
+    "inputs": {
+      "width": [
+        "330",
+        0
+      ],
+      "height": [
+        "331",
+        0
+      ],
+      "face_padding": false,
+      "model": [
+        "455",
+        0
+      ],
+      "images": [
+        "397",
+        0
+      ]
+    },
+    "class_type": "PoseAndFaceDetection",
+    "_meta": {
+      "title": "Pose and Face Detection"
+    }
+  },
+  "455": {
+    "inputs": {
+      "vitpose_model": "vitpose_h_wholebody_model.onnx",
+      "yolo_model": "yolov10m.onnx",
+      "onnx_device": "CUDAExecutionProvider"
+    },
+    "class_type": "OnnxDetectionModelLoader",
+    "_meta": {
+      "title": "ONNX Detection Model Loader"
+    }
+  },
+  "456": {
+    "inputs": {
+      "width": [
+        "330",
+        0
+      ],
+      "height": [
+        "331",
+        0
+      ],
+      "retarget_padding": 16,
+      "body_stick_width": -1,
+      "hand_stick_width": -1,
+      "draw_head": "True",
+      "pose_data": [
+        "451",
+        0
+      ]
+    },
+    "class_type": "DrawViTPose",
+    "_meta": {
+      "title": "Draw ViT Pose"
+    }
+  },
+  "462": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "AnimateDiff_2nd_gpu",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "389",
+        0
+      ],
+      "audio": [
+        "417",
+        2
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "463": {
+    "inputs": {
+      "lora_name": "lightx2v_I2V_14B_480p_cfg_step_distill_rank256_bf16.safetensors",
+      "strength_model": 0.3,
+      "model": [
+        "315",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "475": {
+    "inputs": {
+      "batch_index": 0,
+      "length": 1,
+      "image": [
+        "397",
+        0
+      ]
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Get Image from Batch"
+    }
+  },
+  "476": {
+    "inputs": {
+      "batch_index": 0,
+      "length": 1,
+      "image": [
+        "407",
+        0
+      ]
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Get Image from Batch"
+    }
+  },
+  "479": {
+    "inputs": {
+      "indexes": "-1",
+      "err_if_missing": true,
+      "err_if_empty": true,
+      "image": [
+        "389",
+        0
+      ]
+    },
+    "class_type": "VHS_SelectImages",
+    "_meta": {
+      "title": "Select Images 🎥🅥🅗🅢"
+    }
+  },
+  "542": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "479",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "557": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "pose_Animate",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "456",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "559": {
+    "inputs": {
+      "frame_rate": 24,
+      "loop_count": 0,
+      "filename_prefix": "face _animate",
+      "format": "video/h265-mp4",
+      "pix_fmt": "yuv420p10le",
+      "crf": 22,
+      "save_metadata": true,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "451",
+        1
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "575": {
+    "inputs": {
+      "image": [
+        "311",
+        0
+      ],
+      "video": [
+        "417",
+        0
+      ]
+    },
+    "class_type": "SmartDimensionSelector",
+    "_meta": {
+      "title": "Smart Dimension Selector"
+    }
+  },
+  "576": {
+    "inputs": {
+      "text_0": "1280",
+      "text": [
+        "580",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "Show Text 🐍"
+    }
+  },
+  "580": {
+    "inputs": {
+      "int_": [
+        "330",
+        0
+      ]
+    },
+    "class_type": "CR Integer To String",
+    "_meta": {
+      "title": "🔧 CR Integer To String"
+    }
+  },
+  "582": {
+    "inputs": {
+      "int_": [
+        "331",
+        0
+      ]
+    },
+    "class_type": "CR Integer To String",
+    "_meta": {
+      "title": "🔧 CR Integer To String"
+    }
+  },
+  "583": {
+    "inputs": {
+      "text_0": "720",
+      "text": [
+        "582",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "Show Text 🐍"
+    }
+  }
+}
