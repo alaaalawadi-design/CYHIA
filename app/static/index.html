@@ -40,7 +40,7 @@
       var(--bg);
     background-attachment: fixed;
   }
-  main { max-width: 1200px; margin: 0 auto; padding: 12px 16px 48px; }
+  main { max-width: 1400px; margin: 0 auto; padding: 12px 16px 48px; }
   header.brand {
     display: flex; align-items: center; gap: 16px; margin: 0 0 32px; padding: 10px 22px;
     background: var(--nav-bg); border: 1px solid var(--line); border-radius: 999px;
@@ -140,7 +140,7 @@
   .gallery { margin-top: 36px; }
   .gallery h2 { font-size: 22px; letter-spacing: -.02em; margin: 0 0 4px; }
   .gallery > p { color: var(--muted); margin: 0 0 16px; }
-  .cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+  .cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr)); gap: 20px; }
   .case { padding: 14px; }
   .case h3 { font-size: 16px; margin: 0 0 2px; letter-spacing: -.01em; }
   .case .note { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
@@ -159,6 +159,12 @@
   .badge.animate { color: var(--red); }
   .case .meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 0 0 8px; }
   .case .meta-row a { margin-left: auto; color: var(--accent); }
+  .case .hist-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 12px; align-items: start; }
+  .case .ins { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .case .ins img, .case .ins video { max-height: 420px; }
+  .case .res figcaption { color: var(--accent); }
+  .case .res video { max-height: 780px; }
+  @media (max-width: 380px) { .case .hist-grid { grid-template-columns: 1fr; } }
   .case .fname { overflow-wrap: anywhere; }
   [hidden] { display: none !important; }
 </style>
@@ -175,8 +181,8 @@
   </header>
 
   <section class="hero">
-    <h1>Human image animation, <span>on your own GPUs.</span></h1>
-    <p>Replace a character in a video, or animate a still image from a driving video, from one interface.</p>
+    <h1>Human image animation, <span>from a single image.</span></h1>
+    <p>Replace a character in a video, or animate a still image from a driving video.</p>
   </section>
 
   <nav class="tabs" role="tablist">
@@ -486,10 +492,13 @@ async function loadGallery(service) {
     const card = document.createElement("article"); card.className = "card case";
     const h = document.createElement("h3"); h.textContent = c.title; card.append(h);
     if (c.note) { const n = document.createElement("p"); n.className = "note"; n.textContent = c.note; card.append(n); }
-    const trio = document.createElement("div"); trio.className = "trio";
-    trio.append(...[fig("Reference", "img", c.image), fig("Driving video", "video", c.video),
-                    fig("Result", "video", c.result, true)].filter(Boolean));
-    card.append(trio); list.append(card);
+    const grid = document.createElement("div"); grid.className = "hist-grid";
+    const ins = document.createElement("div"); ins.className = "ins";
+    ins.append(...[fig("Reference", "img", c.image), fig("Driving video", "video", c.video)].filter(Boolean));
+    const res = fig("Result", "video", c.result); res.className = "res";
+    if (ins.children.length) grid.append(ins); else grid.style.gridTemplateColumns = "1fr";
+    grid.append(res);
+    card.append(grid); list.append(card);
   }
 }
 
@@ -513,9 +522,28 @@ function renderHistory() {
     const dl = document.createElement("a"); dl.href = r.url; dl.download = r.name; dl.textContent = "Download";
     row.append(b, when, size, dl);
     const name = document.createElement("p"); name.className = "note fname"; name.textContent = r.name;
+    const fig = (cap, el, wide) => {
+      const f = document.createElement("figure"); if (wide) f.className = "wide";
+      const c = document.createElement("figcaption"); c.textContent = cap;
+      f.append(c, el); return f;
+    };
+    const grid = document.createElement("div"); grid.className = "hist-grid";
+    const ins = document.createElement("div"); ins.className = "ins";
+    if (r.image_url) {
+      const img = document.createElement("img"); img.src = r.image_url; img.loading = "lazy"; img.alt = "Reference image";
+      ins.append(fig("Reference image", img));
+    }
+    if (r.video_url) {
+      const iv = document.createElement("video");
+      iv.src = r.video_url; iv.controls = true; iv.playsInline = true; iv.preload = "metadata";
+      ins.append(fig("Driving video", iv));
+    }
     const v = document.createElement("video");
     v.src = r.url; v.controls = true; v.playsInline = true; v.preload = "metadata";
-    card.append(row, name, v); list.append(card);
+    const res = fig("Result", v); res.className = "res";
+    grid.append(...(ins.children.length ? [ins] : []), res);
+    if (!ins.children.length) grid.style.gridTemplateColumns = "1fr";
+    card.append(row, name, grid); list.append(card);
   }
 }
 document.getElementById("hist-filter").addEventListener("change", renderHistory);

@@ -38,6 +38,7 @@ from .workflows import ANIMATE, REPLACE, Adapter
 
 OUT_DIR = Path(os.environ.get("OUT_DIR", "/app/outputs"))
 UPLOAD_DIR = OUT_DIR / "uploads"
+INPUT_DIR = OUT_DIR / "inputs"       # inputs of finished jobs, for the History tab
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 # assets/gallery/<service>/<case>/{image.*, video.*, result.*, meta.json}; see assets/gallery/README.md.
 GALLERY_DIR = Path(os.environ.get("GALLERY_DIR",
@@ -164,6 +165,7 @@ def _execute(job: Job) -> None:
         job.stage, job.step, job.steps = "Downloading result", 0, 0
         job.result = Path(client.download(finals[0], OUT_DIR / job.service))
         faststart(job.result)            # so the browser can start playing at once
+        _keep_inputs(job)                # History shows what produced each result
         job.state, job.stage = "done", "Done"
     except ComfyTimeout as e:
         job.state, job.error = "error", f"Timed out: {e}"
@@ -174,9 +176,26 @@ def _execute(job: Job) -> None:
         job.state, job.error = "error", f"Unexpected failure: {e}"
     finally:
         job.finished = time.time()
-        for p in (job.image, job.video):
+        for p in (job.image, job.video):     # already moved on success
             p.unlink(missing_ok=True)
         _prune()
+
+
+def _keep_inputs(job: Job) -> None:
+    """Move the uploads next to the result, named after it: <stem>__image.<ext>."""
+    dest = INPUT_DIR / job.service
+    dest.mkdir(parents=True, exist_ok=True)
+    for kind, src in (("image", job.image), ("video", job.video)):
+        if src.is_file():
+            shutil.move(src, dest / f"{job.result.stem}__{kind}{src.suffix}")
+
+
+def _history_input(service: str, stem: str, kind: str, exts: set[str]) -> Path | None:
+    for ext in sorted(exts):
+        f = INPUT_DIR / service / f"{stem}__{kind}{ext}"
+        if f.is_file():
+            return f
+    return None
 
 
 def _save(upload: UploadFile, allowed: set[str], kind: str) -> Path:
@@ -299,9 +318,15 @@ def history() -> list[dict]:
         for f in (OUT_DIR / service).glob("*"):
             if f.is_file() and f.suffix.lower() in VIDEO_EXT:
                 st = f.stat()
-                rows.append({"service": service, "name": f.name, "size": st.st_size,
-                             "finished": st.st_mtime,
-                             "url": f"/api/history/{service}/{quote(f.name)}"})
+                row = {"service": service, "name": f.name, "size": st.st_size,
+                       "finished": st.st_mtime,
+                       "url": f"/api/history/{service}/{quote(f.name)}",
+                       "image_url": None, "video_url": None}
+                for kind, exts in (("image", IMAGE_EXT), ("video", VIDEO_EXT)):
+                    if _history_input(service, f.stem, kind, exts):
+                        row[f"{kind}_url"] = (f"/api/history/{service}/"
+                                              f"{quote(f.name)}/input/{kind}")
+                rows.append(row)
     return sorted(rows, key=lambda r: r["finished"], reverse=True)
 
 
@@ -315,6 +340,17 @@ def history_video(service: str, name: str):
         raise HTTPException(404, "No such result.")
     return FileResponse(f, media_type="video/mp4", filename=f.name,
                         content_disposition_type="inline")
+
+
+@app.get("/api/history/{service}/{name}/input/{kind}")
+def history_input(service: str, name: str, kind: str):
+    if service not in BACKENDS or kind not in ("image", "video"):
+        raise HTTPException(404, "No such input.")
+    f = _history_input(service, Path(name).stem, kind,
+                       IMAGE_EXT if kind == "image" else VIDEO_EXT)
+    if f is None:
+        raise HTTPException(404, "No such input.")
+    return FileResponse(f, content_disposition_type="inline")
 
 
 @app.get("/")
