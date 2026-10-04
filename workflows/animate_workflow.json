@@ -96,7 +96,7 @@
   "314": {
     "inputs": {
       "lora_name": "i2v_lightx2v_low_noise_model.safetensors",
-      "strength_model": 0.3,
+      "strength_model": 0.5,
       "model": [
         "226",
         0
@@ -133,7 +133,7 @@
   "324": {
     "inputs": {
       "seed": 146221682332677,
-      "steps": 6,
+      "steps": 10,
       "cfg": 1,
       "sampler_name": "euler_ancestral_cfg_pp",
       "scheduler": "simple",
@@ -513,7 +513,7 @@
   "463": {
     "inputs": {
       "lora_name": "lightx2v_I2V_14B_480p_cfg_step_distill_rank256_bf16.safetensors",
-      "strength_model": 0.3,
+      "strength_model": 0.5,
       "model": [
         "315",
         0
