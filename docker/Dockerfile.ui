@@ -11,6 +11,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     OUT_DIR=/app/outputs
 
+# ffmpeg/ffprobe: the server trims warm-up frames off finished results.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements-ui.txt /tmp/requirements-ui.txt
 RUN pip install -r /tmp/requirements-ui.txt && rm /tmp/requirements-ui.txt
 

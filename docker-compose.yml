@@ -37,8 +37,8 @@ services:
   # ══════════════════════════════════════════════════════════════════════════
   # GPU 0 — SCAIL-2 character replacement
   #
-  # Image carries ComfyUI v0.27.0 and the pinned environment; the models and
-  # the 7 custom node dirs it needs are mounted from nouran_Rep.
+  # Runs nouran_Rep's own custom nodes, models and venv (mounted), so it is
+  # identical to that install. The image supplies the OS, Python 3.12.3 and system libs.
   # ══════════════════════════════════════════════════════════════════════════
   comfy-replace:
     build:
@@ -60,29 +60,32 @@ services:
       <<: *comfy-env
       NVIDIA_VISIBLE_DEVICES: "0"
       COMFY_PORT: "8136"
+      # Run on the mounted host venv, not the image's /opt/venv.
+      VIRTUAL_ENV: ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/venv
+      PATH: ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/venv/bin:/usr/local/cuda/bin:/usr/local/nvidia/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      # The host resolves CUDA 12 libraries (bitsandbytes, sam2, the ONNX CUDA
+      # provider) through ldconfig; here they come from the mount below.
+      LD_LIBRARY_PATH: /usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda-12.8/targets/x86_64-linux/lib
 
     # Uncomment to reach ComfyUI directly from the host while debugging.
     # ports:
     #   - "8136:8136"
 
     volumes:
-      # ComfyUI v0.27.0 itself is baked into the image (stock upstream), so
-      # only the models and the private custom nodes come from the host.
-
-      # ── Models (read-only, shared with the host install) ──────────────────
+      # Identical to the host install: every custom node, the models, the
+      # host's one local core patch and the venv it runs in are the host's
+      # own, mounted read-only so the service can never modify that install.
+      #
+      # The ComfyUI tree is NOT mounted whole: its .git/config embeds a GitHub
+      # token, which must never be visible inside a container. The rest of the
+      # core is the image's stock v0.27.0, which differs from the host only in
+      # comfy/ops.py (checked with diff -r).
       - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/models:/app/ComfyUI/models:ro
-
-      # ── Only the 7 custom node dirs this workflow needs ───────────────────
-      # Mounted individually rather than the whole 60-dir tree: the others
-      # would each need their own pip dependencies just to import, and two of
-      # them (ComfyUI-QwenVL vs -Mod) define the same class.
-      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/comfyui_controlnet_aux:/app/ComfyUI/custom_nodes/comfyui_controlnet_aux:ro
-      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite:/app/ComfyUI/custom_nodes/ComfyUI-VideoHelperSuite:ro
-      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/ComfyUI-KJNodes:/app/ComfyUI/custom_nodes/ComfyUI-KJNodes:ro
-      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/comfyui_essentials:/app/ComfyUI/custom_nodes/comfyui_essentials:ro
-      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/comfyui-scail2-infinity:/app/ComfyUI/custom_nodes/comfyui-scail2-infinity:ro
-      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/dwpose_retarget:/app/ComfyUI/custom_nodes/dwpose_retarget:ro
-      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes/ComfyUI-QwenVL:/app/ComfyUI/custom_nodes/ComfyUI-QwenVL:ro
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/custom_nodes:/app/ComfyUI/custom_nodes:ro
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/ComfyUI/comfy/ops.py:/app/ComfyUI/comfy/ops.py:ro
+      # The venv must sit at its host path — its scripts and pyvenv.cfg carry it.
+      - ${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/venv:${REP_ROOT:-/home/administrator/Disk/nouran_Rep}/venv:ro
+      - /usr/local/cuda-12.8:/usr/local/cuda-12.8:ro
 
       # ── Writable: this service's own input/output, not shared with animate ─
       - ./data/replace/input:/app/ComfyUI/input

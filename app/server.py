@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
+import subprocess
 import threading
 import time
 import traceback
@@ -53,6 +55,11 @@ TIMEOUTS = {"replace": 3 * 3600.0, "animate": 2 * 3600.0}
 MAX_WAITING = 10
 # Finished jobs kept for the status endpoint; their output files are not deleted.
 KEEP_FINISHED = 200
+
+# Warm-up frames cut from the start of the result AND of the saved input video,
+# per service. 0 turns trimming off for that service. At the workflows' 24 fps
+# these 10 frames are 0.42 s.
+TRIM_FRAMES = {"replace": 10, "animate": 10}
 
 BACKENDS = {
     "animate": ComfyClient(os.environ.get("ANIMATE_URL", "http://comfy-animate:8134"),
@@ -126,6 +133,117 @@ def _prune() -> None:
             del JOBS[j.id]
 
 
+_NAME_LOCK = threading.Lock()
+
+
+def _next_number(service: str, prefix: str) -> int:
+    """
+    The checker: look in ui_outputs/<service>/ (and the saved-inputs folder),
+    find the highest number used by files named `<prefix>_<number>...`, and
+    return that plus one. Looking at the inputs folder too means a number is
+    never reused while any file from an older run still carries it.
+    """
+    pat = re.compile(rf"^{re.escape(prefix)}_(\d+)")
+    used = [int(m.group(1))
+            for folder in (OUT_DIR / service, INPUT_DIR / service) if folder.is_dir()
+            for f in folder.iterdir() if (m := pat.match(f.name))]
+    return max(used, default=0) + 1
+
+
+def _place_result(service: str, downloaded: Path, prefix: str) -> Path:
+    """
+    Move a freshly downloaded result into ui_outputs/<service>/ under the next
+    free name (Cy_Replace_00013.mp4, ...). It can never overwrite an older file,
+    whatever name ComfyUI gave it.
+    """
+    folder = OUT_DIR / service
+    folder.mkdir(parents=True, exist_ok=True)
+    with _NAME_LOCK:
+        dest = folder / f"{prefix}_{_next_number(service, prefix):05d}{downloaded.suffix}"
+        downloaded.replace(dest)             # same disk, so this is instant and atomic
+    return dest
+
+
+def _duration(path: Path) -> float | None:
+    """Length of a video in seconds, or None if ffprobe cannot tell."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True, check=True, timeout=60).stdout.strip()
+        return float(out)
+    except Exception:                            # noqa: BLE001
+        return None
+
+
+def _fps(path: Path) -> float | None:
+    """Frame rate of the first video stream, or None if ffprobe cannot tell."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True, check=True, timeout=60).stdout.strip()
+        num, _, den = out.partition("/")
+        return float(num) / float(den or 1)
+    except Exception:                            # noqa: BLE001
+        return None
+
+
+def _trim(src: Path, dst: Path, seconds: float) -> bool:
+    """
+    Write a copy of `src` without its first `seconds` to `dst` (src and dst may
+    be the same path). Returns True on success. On any failure, or if the clip
+    is too short to trim, the original is left untouched and False is returned,
+    so a trim problem never fails a job that already cost an hour of GPU time.
+
+    Takes seconds rather than a frame count on purpose: the result and the saved
+    input have different frame rates (the workflow resamples the driving video to
+    its own rate), so only a duration cuts the same moment out of both.
+    """
+    if seconds <= 0:
+        return False
+    dur = _duration(src)
+    if dur is not None and dur <= seconds + 0.5:
+        print(f"trim skipped for {src.name}: only {dur:.1f}s long")
+        return False
+
+    tmp = dst.with_name(dst.name + ".part")      # History ignores .part files
+    cmd = ["ffmpeg", "-y", "-v", "error",
+           "-i", str(src), "-ss", str(seconds),   # -ss after -i = frame-accurate
+           # yuv420p needs even width/height; this changes nothing if already even
+           "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+           "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+           "-c:a", "aac", "-b:a", "192k",
+           "-movflags", "+faststart",
+           "-f", "mp4", str(tmp)]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=900)
+        tmp.replace(dst)
+        return True
+    except Exception as e:                       # noqa: BLE001
+        print(f"trim skipped for {src.name}: {e}")
+        return False
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _trim_warmup(result: Path, frames: int) -> float:
+    """
+    Cut `frames` warm-up frames off the front of a finished result, in place.
+    Returns the number of seconds actually removed, or 0.0 if nothing was cut.
+
+    The frame count is read against the result's own frame rate, which is the rate
+    the workflow renders at. That duration is what the caller reuses for the saved
+    input video, whose native rate is usually different.
+    """
+    fps = _fps(result)
+    if not fps:
+        print(f"trim skipped for {result.name}: cannot read its frame rate")
+        return 0.0
+    seconds = frames / fps
+    return seconds if _trim(result, result, seconds) else 0.0
+
+
 def _execute(job: Job) -> None:
     adapter: Adapter = ADAPTERS[job.service]
     client = BACKENDS[job.service]
@@ -163,9 +281,22 @@ def _execute(job: Job) -> None:
                              f"{adapter.output_node} (got: {got}).")
 
         job.stage, job.step, job.steps = "Downloading result", 0, 0
-        job.result = Path(client.download(finals[0], OUT_DIR / job.service))
-        faststart(job.result)            # so the browser can start playing at once
-        _keep_inputs(job)                # History shows what produced each result
+        incoming = OUT_DIR / "incoming" / job.id      # History never looks here
+        downloaded = Path(client.download(finals[0], incoming))
+        # Finish the file while it is still in the private holding folder, so
+        # nothing untrimmed is ever visible in History.
+        # How much was actually cut off the result, in seconds. The saved input is
+        # then cut by the same duration, so the two line up in History.
+        trimmed = 0.0
+        if TRIM_FRAMES.get(job.service, 0) > 0:
+            job.stage = "Trimming"
+            trimmed = _trim_warmup(downloaded, TRIM_FRAMES[job.service])
+        if not trimmed:
+            faststart(downloaded)        # so the browser can start playing at once
+                                         # (a successful trim already wrote faststart)
+        # Only now does it get its final name and appear in ui_outputs/<service>/
+        job.result = _place_result(job.service, downloaded, adapter.output_prefix)
+        _keep_inputs(job, trimmed)       # History shows what produced each result
         job.state, job.stage = "done", "Done"
     except ComfyTimeout as e:
         job.state, job.error = "error", f"Timed out: {e}"
@@ -176,18 +307,29 @@ def _execute(job: Job) -> None:
         job.state, job.error = "error", f"Unexpected failure: {e}"
     finally:
         job.finished = time.time()
+        shutil.rmtree(OUT_DIR / "incoming" / job.id, ignore_errors=True)
         for p in (job.image, job.video):     # already moved on success
             p.unlink(missing_ok=True)
         _prune()
 
 
-def _keep_inputs(job: Job) -> None:
-    """Move the uploads next to the result, named after it: <stem>__image.<ext>."""
+def _keep_inputs(job: Job, trimmed: float = 0.0) -> None:
+    """
+    Save the uploads next to the result, named after it: <stem>__image.<ext>.
+
+    `trimmed` is how many seconds came off the front of the result; the driving
+    video is cut by the same duration so the pair stays in sync in History.
+    """
     dest = INPUT_DIR / job.service
     dest.mkdir(parents=True, exist_ok=True)
+    stem = job.result.stem
     for kind, src in (("image", job.image), ("video", job.video)):
-        if src.is_file():
-            shutil.move(src, dest / f"{job.result.stem}__{kind}{src.suffix}")
+        if not src.is_file():
+            continue
+        if kind == "video" and trimmed > 0:
+            if _trim(src, dest / f"{stem}__video.mp4", trimmed):
+                continue                     # the original upload is deleted in _execute
+        shutil.move(src, dest / f"{stem}__{kind}{src.suffix}")
 
 
 def _history_input(service: str, stem: str, kind: str, exts: set[str]) -> Path | None:
@@ -367,6 +509,13 @@ def main():
     import uvicorn
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Half-finished downloads from a container that was killed mid-job. The
+    # per-job cleanup in _execute cannot run in that case, and nothing else
+    # ever looks in here, so the files would sit on disk forever.
+    shutil.rmtree(OUT_DIR / "incoming", ignore_errors=True)
+    if any(TRIM_FRAMES.values()) and not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        print("WARNING: ffmpeg/ffprobe not found in this container: results will "
+              "NOT be trimmed. Install ffmpeg in the UI image or set TRIM_FRAMES to 0.")
     for f in OUT_DIR.glob("*/*.mp4"):    # results saved before faststart was added
         try:
             faststart(f)

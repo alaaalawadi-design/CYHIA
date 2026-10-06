@@ -99,6 +99,19 @@ RUN mkdir -p /app/ComfyUI/custom_nodes /app/ComfyUI/models \
 COPY entrypoint-comfy.sh /app/entrypoint-comfy.sh
 RUN chmod +x /app/entrypoint-comfy.sh
 
+# Host-parity layer. docker-compose.yml mounts nouran_Rep's custom nodes and its
+# venv so the service is identical to that install; this
+# adds the few system pieces the mounted venv expects from the host:
+#   /usr/bin/python3   the venv's interpreter symlink points here (same 3.12.3)
+#   libegl1/libgles2   mediapipe        libtbb12   numba's tbb pool
+#   libibverbs1/ibverbs-providers       nvidia cufile_rdma
+# At the bottom so it cannot invalidate the pip layers above. /opt/venv stays as
+# the fallback when the venv mount is removed.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libegl1 libgles2 libtbb12 libibverbs1 ibverbs-providers \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python3
+
 WORKDIR /app/ComfyUI
 EXPOSE 8136
 ENTRYPOINT ["/app/entrypoint-comfy.sh"]

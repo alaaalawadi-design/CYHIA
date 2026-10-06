@@ -34,7 +34,6 @@ def main():
     ap.add_argument("--video", required=True)
     ap.add_argument("--frames", type=int, default=49,
                     help="frame_load_cap; 4n+1 keeps the latent aligned")
-    ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--timeout", type=float, default=7200.0)
     ap.add_argument("--out", default=None)
     ap.add_argument("--check-only", action="store_true",
@@ -75,7 +74,7 @@ def main():
     video_name = client.upload(args.video)
     print(f"uploaded  image -> {image_name}\n          video -> {video_name}")
 
-    wf = adapter.build(image_name, video_name, frame_cap=args.frames, seed=args.seed)
+    wf = adapter.build(image_name, video_name, frame_cap=args.frames)
     titles = client.node_titles(wf)
 
     stage_log: list[tuple[str, float]] = []
