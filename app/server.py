@@ -40,11 +40,14 @@ from .workflows import ANIMATE, REPLACE, Adapter
 
 OUT_DIR = Path(os.environ.get("OUT_DIR", "/app/outputs"))
 UPLOAD_DIR = OUT_DIR / "uploads"
-INPUT_DIR = OUT_DIR / "inputs"       # inputs of finished jobs, for the History tab
+INPUT_DIR = OUT_DIR / "inputs"  # inputs of finished jobs, for the History tab
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 # assets/gallery/<service>/<case>/{image.*, video.*, result.*, meta.json}; see assets/gallery/README.md.
-GALLERY_DIR = Path(os.environ.get("GALLERY_DIR",
-                                  Path(__file__).resolve().parents[1] / "assets" / "gallery"))
+GALLERY_DIR = Path(
+    os.environ.get(
+        "GALLERY_DIR", Path(__file__).resolve().parents[1] / "assets" / "gallery"
+    )
+)
 
 # Replacement costs ~3 min fixed plus ~3.3 s/frame (measured), so a full
 # 1140-frame job runs 65-70 min. Three hours leaves room for a cold model load
@@ -59,13 +62,15 @@ KEEP_FINISHED = 200
 # Warm-up frames cut from the start of the result AND of the saved input video,
 # per service. 0 turns trimming off for that service. At the workflows' 24 fps
 # these 10 frames are 0.42 s.
-TRIM_FRAMES = {"replace": 10, "animate": 10}
+TRIM_FRAMES = {"replace": 6, "animate": 6}
 
 BACKENDS = {
-    "animate": ComfyClient(os.environ.get("ANIMATE_URL", "http://comfy-animate:8134"),
-                           name="animate"),
-    "replace": ComfyClient(os.environ.get("REPLACE_URL", "http://comfy-replace:8136"),
-                           name="replace"),
+    "animate": ComfyClient(
+        os.environ.get("ANIMATE_URL", "http://comfy-animate:8134"), name="animate"
+    ),
+    "replace": ComfyClient(
+        os.environ.get("REPLACE_URL", "http://comfy-replace:8136"), name="replace"
+    ),
 }
 ADAPTERS = {"animate": ANIMATE, "replace": REPLACE}
 LABELS = {"animate": "Animate (GPU 1)", "replace": "Replace (GPU 0)"}
@@ -81,7 +86,7 @@ class Job:
     service: str
     image: Path
     video: Path
-    state: str = "queued"            # queued | running | done | error
+    state: str = "queued"  # queued | running | done | error
     stage: str = "Waiting for the GPU"
     step: int = 0
     steps: int = 0
@@ -111,8 +116,10 @@ class Job:
 
 JOBS: dict[str, Job] = {}
 LOCK = threading.Lock()
-EXECUTORS = {name: ThreadPoolExecutor(max_workers=1, thread_name_prefix=name)
-             for name in BACKENDS}
+EXECUTORS = {
+    name: ThreadPoolExecutor(max_workers=1, thread_name_prefix=name)
+    for name in BACKENDS
+}
 
 
 def _ahead(job: Job) -> int:
@@ -120,15 +127,21 @@ def _ahead(job: Job) -> int:
     if job.state != "queued":
         return 0
     with LOCK:
-        return sum(1 for j in JOBS.values()
-                   if j.service == job.service and j.created < job.created
-                   and j.state in ("queued", "running"))
+        return sum(
+            1
+            for j in JOBS.values()
+            if j.service == job.service
+            and j.created < job.created
+            and j.state in ("queued", "running")
+        )
 
 
 def _prune() -> None:
     with LOCK:
-        done = sorted((j for j in JOBS.values() if j.state in ("done", "error")),
-                      key=lambda j: j.created)
+        done = sorted(
+            (j for j in JOBS.values() if j.state in ("done", "error")),
+            key=lambda j: j.created,
+        )
         for j in done[:-KEEP_FINISHED]:
             del JOBS[j.id]
 
@@ -144,9 +157,13 @@ def _next_number(service: str, prefix: str) -> int:
     never reused while any file from an older run still carries it.
     """
     pat = re.compile(rf"^{re.escape(prefix)}_(\d+)")
-    used = [int(m.group(1))
-            for folder in (OUT_DIR / service, INPUT_DIR / service) if folder.is_dir()
-            for f in folder.iterdir() if (m := pat.match(f.name))]
+    used = [
+        int(m.group(1))
+        for folder in (OUT_DIR / service, INPUT_DIR / service)
+        if folder.is_dir()
+        for f in folder.iterdir()
+        if (m := pat.match(f.name))
+    ]
     return max(used, default=0) + 1
 
 
@@ -159,8 +176,10 @@ def _place_result(service: str, downloaded: Path, prefix: str) -> Path:
     folder = OUT_DIR / service
     folder.mkdir(parents=True, exist_ok=True)
     with _NAME_LOCK:
-        dest = folder / f"{prefix}_{_next_number(service, prefix):05d}{downloaded.suffix}"
-        downloaded.replace(dest)             # same disk, so this is instant and atomic
+        dest = (
+            folder / f"{prefix}_{_next_number(service, prefix):05d}{downloaded.suffix}"
+        )
+        downloaded.replace(dest)  # same disk, so this is instant and atomic
     return dest
 
 
@@ -168,11 +187,23 @@ def _duration(path: Path) -> float | None:
     """Length of a video in seconds, or None if ffprobe cannot tell."""
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "csv=p=0", str(path)],
-            capture_output=True, text=True, check=True, timeout=60).stdout.strip()
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,
+        ).stdout.strip()
         return float(out)
-    except Exception:                            # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -180,12 +211,26 @@ def _fps(path: Path) -> float | None:
     """Frame rate of the first video stream, or None if ffprobe cannot tell."""
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", str(path)],
-            capture_output=True, text=True, check=True, timeout=60).stdout.strip()
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=r_frame_rate",
+                "-of",
+                "csv=p=0",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,
+        ).stdout.strip()
         num, _, den = out.partition("/")
         return float(num) / float(den or 1)
-    except Exception:                            # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -207,20 +252,42 @@ def _trim(src: Path, dst: Path, seconds: float) -> bool:
         print(f"trim skipped for {src.name}: only {dur:.1f}s long")
         return False
 
-    tmp = dst.with_name(dst.name + ".part")      # History ignores .part files
-    cmd = ["ffmpeg", "-y", "-v", "error",
-           "-i", str(src), "-ss", str(seconds),   # -ss after -i = frame-accurate
-           # yuv420p needs even width/height; this changes nothing if already even
-           "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-           "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", "192k",
-           "-movflags", "+faststart",
-           "-f", "mp4", str(tmp)]
+    tmp = dst.with_name(dst.name + ".part")  # History ignores .part files
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-v",
+        "error",
+        "-i",
+        str(src),
+        "-ss",
+        str(seconds),  # -ss after -i = frame-accurate
+        # yuv420p needs even width/height; this changes nothing if already even
+        "-vf",
+        "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-movflags",
+        "+faststart",
+        "-f",
+        "mp4",
+        str(tmp),
+    ]
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=900)
         tmp.replace(dst)
         return True
-    except Exception as e:                       # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         print(f"trim skipped for {src.name}: {e}")
         return False
     finally:
@@ -250,8 +317,10 @@ def _execute(job: Job) -> None:
     job.state, job.started = "running", time.time()
     try:
         if not client.is_up():
-            raise ComfyError(f"The {LABELS[job.service]} backend is not reachable "
-                             f"({client.base_url}). The other tab may still work.")
+            raise ComfyError(
+                f"The {LABELS[job.service]} backend is not reachable "
+                f"({client.base_url}). The other tab may still work."
+            )
 
         job.stage = "Uploading inputs"
         image_name = client.upload(job.image)
@@ -260,8 +329,9 @@ def _execute(job: Job) -> None:
         # Unset in production: the workflow's own cap (1140 frames for replace)
         # decides length. Set MAX_FRAMES on a staging deployment to keep jobs short.
         cap = os.environ.get("MAX_FRAMES")
-        workflow = adapter.build(image_name, video_name,
-                                 frame_cap=int(cap) if cap else None)
+        workflow = adapter.build(
+            image_name, video_name, frame_cap=int(cap) if cap else None
+        )
         titles = client.node_titles(workflow)
 
         def on_progress(p):
@@ -271,17 +341,20 @@ def _execute(job: Job) -> None:
             job.step, job.steps = p.step, p.steps
 
         job.stage = "Submitting"
-        result = client.run(workflow, timeout=TIMEOUTS[job.service],
-                            on_progress=on_progress)
+        result = client.run(
+            workflow, timeout=TIMEOUTS[job.service], on_progress=on_progress
+        )
 
         finals = [v for v in result.videos if v["node_id"] == adapter.output_node]
         if not finals:
             got = ", ".join(sorted({v["node_id"] for v in result.videos})) or "nothing"
-            raise ComfyError(f"The job finished but produced no video on node "
-                             f"{adapter.output_node} (got: {got}).")
+            raise ComfyError(
+                f"The job finished but produced no video on node "
+                f"{adapter.output_node} (got: {got})."
+            )
 
         job.stage, job.step, job.steps = "Downloading result", 0, 0
-        incoming = OUT_DIR / "incoming" / job.id      # History never looks here
+        incoming = OUT_DIR / "incoming" / job.id  # History never looks here
         downloaded = Path(client.download(finals[0], incoming))
         # Finish the file while it is still in the private holding folder, so
         # nothing untrimmed is ever visible in History.
@@ -292,23 +365,23 @@ def _execute(job: Job) -> None:
             job.stage = "Trimming"
             trimmed = _trim_warmup(downloaded, TRIM_FRAMES[job.service])
         if not trimmed:
-            faststart(downloaded)        # so the browser can start playing at once
-                                         # (a successful trim already wrote faststart)
+            faststart(downloaded)  # so the browser can start playing at once
+            # (a successful trim already wrote faststart)
         # Only now does it get its final name and appear in ui_outputs/<service>/
         job.result = _place_result(job.service, downloaded, adapter.output_prefix)
-        _keep_inputs(job, trimmed)       # History shows what produced each result
+        _keep_inputs(job, trimmed)  # History shows what produced each result
         job.state, job.stage = "done", "Done"
     except ComfyTimeout as e:
         job.state, job.error = "error", f"Timed out: {e}"
     except ComfyError as e:
         job.state, job.error = "error", str(e)
-    except Exception as e:                       # noqa: BLE001 - surfaced to the user
+    except Exception as e:  # noqa: BLE001 - surfaced to the user
         traceback.print_exc()
         job.state, job.error = "error", f"Unexpected failure: {e}"
     finally:
         job.finished = time.time()
         shutil.rmtree(OUT_DIR / "incoming" / job.id, ignore_errors=True)
-        for p in (job.image, job.video):     # already moved on success
+        for p in (job.image, job.video):  # already moved on success
             p.unlink(missing_ok=True)
         _prune()
 
@@ -328,7 +401,7 @@ def _keep_inputs(job: Job, trimmed: float = 0.0) -> None:
             continue
         if kind == "video" and trimmed > 0:
             if _trim(src, dest / f"{stem}__video.mp4", trimmed):
-                continue                     # the original upload is deleted in _execute
+                continue  # the original upload is deleted in _execute
         shutil.move(src, dest / f"{stem}__{kind}{src.suffix}")
 
 
@@ -343,8 +416,11 @@ def _history_input(service: str, stem: str, kind: str, exts: set[str]) -> Path |
 def _save(upload: UploadFile, allowed: set[str], kind: str) -> Path:
     suffix = Path(upload.filename or "").suffix.lower()
     if suffix not in allowed:
-        raise HTTPException(400, f"Unsupported {kind} type '{suffix or '?'}'. "
-                                 f"Use one of: {', '.join(sorted(allowed))}.")
+        raise HTTPException(
+            400,
+            f"Unsupported {kind} type '{suffix or '?'}'. "
+            f"Use one of: {', '.join(sorted(allowed))}.",
+        )
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     dest = UPLOAD_DIR / f"{uuid.uuid4().hex}{suffix}"
     with dest.open("wb") as fh:
@@ -361,27 +437,43 @@ def status() -> dict:
     out = {}
     for name, client in BACKENDS.items():
         if not client.is_up():
-            out[name] = {"state": "offline", "label": LABELS[name],
-                         "detail": f"offline ({client.base_url})"}
+            out[name] = {
+                "state": "offline",
+                "label": LABELS[name],
+                "detail": f"offline ({client.base_url})",
+            }
             continue
         running, pending = client.queue_depth()
-        out[name] = {"state": "busy" if running else "ready", "label": LABELS[name],
-                     "detail": (f"busy, {pending} queued" if pending else "busy")
-                     if running else "ready"}
+        out[name] = {
+            "state": "busy" if running else "ready",
+            "label": LABELS[name],
+            "detail": (
+                (f"busy, {pending} queued" if pending else "busy")
+                if running
+                else "ready"
+            ),
+        }
     return out
 
 
 @app.post("/api/{service}/jobs")
-def create_job(service: str, image: UploadFile = File(...),
-               video: UploadFile = File(...)) -> dict:
+def create_job(
+    service: str, image: UploadFile = File(...), video: UploadFile = File(...)
+) -> dict:
     if service not in BACKENDS:
         raise HTTPException(404, f"Unknown service '{service}'.")
     with LOCK:
-        waiting = sum(1 for j in JOBS.values()
-                      if j.service == service and j.state in ("queued", "running"))
+        waiting = sum(
+            1
+            for j in JOBS.values()
+            if j.service == service and j.state in ("queued", "running")
+        )
     if waiting >= MAX_WAITING:
-        raise HTTPException(429, f"{waiting} jobs are already waiting for "
-                                 f"{LABELS[service]}. Try again later.")
+        raise HTTPException(
+            429,
+            f"{waiting} jobs are already waiting for "
+            f"{LABELS[service]}. Try again later.",
+        )
     img = _save(image, IMAGE_EXT, "image")
     try:
         vid = _save(video, VIDEO_EXT, "video")
@@ -389,8 +481,9 @@ def create_job(service: str, image: UploadFile = File(...),
         img.unlink(missing_ok=True)
         raise
 
-    job = Job(id=uuid.uuid4().hex, service=service, image=img, video=vid,
-              created=time.time())
+    job = Job(
+        id=uuid.uuid4().hex, service=service, image=img, video=vid, created=time.time()
+    )
     with LOCK:
         JOBS[job.id] = job
     EXECUTORS[service].submit(_execute, job)
@@ -414,8 +507,12 @@ def get_video(job_id: str):
     job = _job(job_id)
     if not job.result or not job.result.is_file():
         raise HTTPException(404, "No result for this job.")
-    return FileResponse(job.result, media_type="video/mp4", filename=job.result.name,
-                        content_disposition_type="inline")
+    return FileResponse(
+        job.result,
+        media_type="video/mp4",
+        filename=job.result.name,
+        content_disposition_type="inline",
+    )
 
 
 def _gallery() -> dict[str, list[dict]]:
@@ -423,11 +520,13 @@ def _gallery() -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {name: [] for name in BACKENDS}
     for service in out:
         for case in sorted(p for p in (GALLERY_DIR / service).glob("*") if p.is_dir()):
+
             def find(stem: str, exts: set[str]) -> str | None:
                 for f in sorted(case.glob(f"{stem}.*")):
                     if f.suffix.lower() in exts:
                         return f"/gallery/{service}/{case.name}/{f.name}"
                 return None
+
             result = find("result", VIDEO_EXT)
             if not result:
                 continue
@@ -436,13 +535,15 @@ def _gallery() -> dict[str, list[dict]]:
                 meta = json.loads((case / "meta.json").read_text())
             except (OSError, ValueError):
                 pass
-            out[service].append({
-                "title": str(meta.get("title") or case.name.replace("_", " ")),
-                "note": str(meta.get("note") or ""),
-                "image": find("image", IMAGE_EXT),
-                "video": find("video", VIDEO_EXT),
-                "result": result,
-            })
+            out[service].append(
+                {
+                    "title": str(meta.get("title") or case.name.replace("_", " ")),
+                    "note": str(meta.get("note") or ""),
+                    "image": find("image", IMAGE_EXT),
+                    "video": find("video", VIDEO_EXT),
+                    "result": result,
+                }
+            )
     return out
 
 
@@ -460,14 +561,20 @@ def history() -> list[dict]:
         for f in (OUT_DIR / service).glob("*"):
             if f.is_file() and f.suffix.lower() in VIDEO_EXT:
                 st = f.stat()
-                row = {"service": service, "name": f.name, "size": st.st_size,
-                       "finished": st.st_mtime,
-                       "url": f"/api/history/{service}/{quote(f.name)}",
-                       "image_url": None, "video_url": None}
+                row = {
+                    "service": service,
+                    "name": f.name,
+                    "size": st.st_size,
+                    "finished": st.st_mtime,
+                    "url": f"/api/history/{service}/{quote(f.name)}",
+                    "image_url": None,
+                    "video_url": None,
+                }
                 for kind, exts in (("image", IMAGE_EXT), ("video", VIDEO_EXT)):
                     if _history_input(service, f.stem, kind, exts):
-                        row[f"{kind}_url"] = (f"/api/history/{service}/"
-                                              f"{quote(f.name)}/input/{kind}")
+                        row[f"{kind}_url"] = (
+                            f"/api/history/{service}/" f"{quote(f.name)}/input/{kind}"
+                        )
                 rows.append(row)
     return sorted(rows, key=lambda r: r["finished"], reverse=True)
 
@@ -480,16 +587,18 @@ def history_video(service: str, name: str):
     f = (root / name).resolve()
     if f.parent != root or not f.is_file() or f.suffix.lower() not in VIDEO_EXT:
         raise HTTPException(404, "No such result.")
-    return FileResponse(f, media_type="video/mp4", filename=f.name,
-                        content_disposition_type="inline")
+    return FileResponse(
+        f, media_type="video/mp4", filename=f.name, content_disposition_type="inline"
+    )
 
 
 @app.get("/api/history/{service}/{name}/input/{kind}")
 def history_input(service: str, name: str, kind: str):
     if service not in BACKENDS or kind not in ("image", "video"):
         raise HTTPException(404, "No such input.")
-    f = _history_input(service, Path(name).stem, kind,
-                       IMAGE_EXT if kind == "image" else VIDEO_EXT)
+    f = _history_input(
+        service, Path(name).stem, kind, IMAGE_EXT if kind == "image" else VIDEO_EXT
+    )
     if f is None:
         raise HTTPException(404, "No such input.")
     return FileResponse(f, content_disposition_type="inline")
@@ -513,18 +622,25 @@ def main():
     # per-job cleanup in _execute cannot run in that case, and nothing else
     # ever looks in here, so the files would sit on disk forever.
     shutil.rmtree(OUT_DIR / "incoming", ignore_errors=True)
-    if any(TRIM_FRAMES.values()) and not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
-        print("WARNING: ffmpeg/ffprobe not found in this container: results will "
-              "NOT be trimmed. Install ffmpeg in the UI image or set TRIM_FRAMES to 0.")
-    for f in OUT_DIR.glob("*/*.mp4"):    # results saved before faststart was added
+    if any(TRIM_FRAMES.values()) and not (
+        shutil.which("ffmpeg") and shutil.which("ffprobe")
+    ):
+        print(
+            "WARNING: ffmpeg/ffprobe not found in this container: results will "
+            "NOT be trimmed. Install ffmpeg in the UI image or set TRIM_FRAMES to 0."
+        )
+    for f in OUT_DIR.glob("*/*.mp4"):  # results saved before faststart was added
         try:
             faststart(f)
         except (OSError, ValueError) as e:
             print(f"faststart skipped for {f.name}: {e}")
     for name, client in BACKENDS.items():
         print(f"{name:>8}: {client.base_url}  {'up' if client.is_up() else 'DOWN'}")
-    uvicorn.run(app, host=os.environ.get("UI_HOST", "0.0.0.0"),
-                port=int(os.environ.get("UI_PORT", "7860")))
+    uvicorn.run(
+        app,
+        host=os.environ.get("UI_HOST", "0.0.0.0"),
+        port=int(os.environ.get("UI_PORT", "7860")),
+    )
 
 
 if __name__ == "__main__":
