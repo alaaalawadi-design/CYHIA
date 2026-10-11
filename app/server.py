@@ -48,9 +48,17 @@ GALLERY_DIR = Path(
         "GALLERY_DIR", Path(__file__).resolve().parents[1] / "assets" / "gallery"
     )
 )
+# Stills and clips illustrating the Documentation tab. The tab's text lives in
+# index.html; this directory only supplies the media it points at, so a missing
+# directory degrades to a text-only tab rather than breaking it.
+DOCS_DIR = Path(
+    os.environ.get(
+        "DOCS_DIR", Path(__file__).resolve().parents[1] / "assets" / "documentation"
+    )
+)
 
 # Replacement costs ~3 min fixed plus ~3.3 s/frame (measured), so a full
-# 1140-frame job runs 65-70 min. Three hours leaves room for a cold model load
+# 1040-frame job runs about 60 min. Three hours leaves room for a cold model load
 # and a queued job ahead of it without stranding the user on a hang.
 TIMEOUTS = {"replace": 3 * 3600.0, "animate": 2 * 3600.0}
 
@@ -61,7 +69,7 @@ KEEP_FINISHED = 200
 
 # Warm-up frames cut from the start of the result AND of the saved input video,
 # per service. 0 turns trimming off for that service. At the workflows' 24 fps
-# these 10 frames are 0.42 s.
+# these 6 frames are 0.25 s.
 TRIM_FRAMES = {"replace": 6, "animate": 6}
 
 BACKENDS = {
@@ -326,7 +334,7 @@ def _execute(job: Job) -> None:
         image_name = client.upload(job.image)
         video_name = client.upload(job.video)
 
-        # Unset in production: the workflow's own cap (1140 frames for replace)
+        # Unset in production: the workflow's own cap (1040 frames for replace)
         # decides length. Set MAX_FRAMES on a staging deployment to keep jobs short.
         cap = os.environ.get("MAX_FRAMES")
         workflow = adapter.build(
@@ -611,6 +619,8 @@ def index():
 
 if GALLERY_DIR.is_dir():
     app.mount("/gallery", StaticFiles(directory=GALLERY_DIR), name="gallery")
+if DOCS_DIR.is_dir():
+    app.mount("/docs-assets", StaticFiles(directory=DOCS_DIR), name="docs-assets")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 

@@ -204,7 +204,7 @@
   },
   "168": {
     "inputs": {
-      "text": "10000% follow the pose and DEPTH and limb positions shown in image 2. never bleed pose drawing into charchter Dont Change the face and features of the face Make it sharp as the refrence image 100% follow the Refrence upscale the genrated image in good resloution nsont black the charchter lighting keep it good lighting and upscaled \\nMake the background Black\n",
+      "text": "10000% follow the POSE limb positions DEPTH ,100000 %Follow the Body facing direction, Strictly follow the Depth. never bleed pose drawing into charchter Dont Change the face and features of the face Make it sharp as the refrence image 1000% follow the Refrence upscale the genrated image in good resloution nsont black the charchter lighting keep it good lighting and upscaled \n\nMake the background Black\n",
       "clip": [
         "116",
         0
@@ -311,7 +311,7 @@
   },
   "188": {
     "inputs": {
-      "image": "5af3b88ff497e9234b354cc58778cee0.jpg"
+      "image": "0a98f6f1b32c1b0f81b1e91ddec1d3fa.jpg"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -601,7 +601,7 @@
   },
   "311": {
     "inputs": {
-      "detection_threshold": 0.61,
+      "detection_threshold": 0.5,
       "max_objects": 5,
       "detect_interval": 1,
       "images": [
@@ -657,11 +657,11 @@
   },
   "317": {
     "inputs": {
-      "detection_threshold": 0.61,
+      "detection_threshold": 0.5,
       "max_objects": 5,
       "detect_interval": 1,
       "images": [
-        "487",
+        "477",
         0
       ],
       "model": [
@@ -837,7 +837,7 @@
         0
       ],
       "image": [
-        "487",
+        "477",
         0
       ]
     },
@@ -1013,7 +1013,7 @@
   },
   "384": {
     "inputs": {
-      "video": "Video Project 69.mp4",
+      "video": "trimmed_video_20260806_162621.mp4",
       "force_rate": 24,
       "custom_width": 0,
       "custom_height": 0,
@@ -1111,7 +1111,7 @@
   },
   "397": {
     "inputs": {
-      "text": "  deformed limbs, unnaturally long arms, elongated legs, warped hands, stretched torso, disproportionate body scaling, changing the original body shape, altering character weight, erasing body fat, thinning out a heavy physique, distorting body proportions, extra joints, mutated fingers, low-resolution artifacts, anatomy distortion, weirdly sized limbs, changing the body mass from the reference image. Changing Face \n",
+      "text": "deformed limbs, unnaturally long arms, elongated legs, warped hands, stretched torso, disproportionate body scaling, changing the original body shape, altering character weight, erasing body fat, thinning out a heavy physique, distorting body proportions, extra joints, mutated fingers, low-resolution artifacts, anatomy distortion, weirdly sized limbs, changing the body mass from the reference image, Changing Face \n",
       "clip": [
         "116",
         0
@@ -1120,16 +1120,6 @@
     "class_type": "CLIPTextEncode",
     "_meta": {
       "title": "CLIP Text Encode (Prompt)"
-    }
-  },
-  "398": {
-    "inputs": {
-      "reference_index": 0,
-      "weight": 1
-    },
-    "class_type": "Flux2KleinRefLatentWeight",
-    "_meta": {
-      "title": "FLUX.2 Klein Ref Latent Weight"
     }
   },
   "399": {
@@ -1187,7 +1177,7 @@
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1,
-      "window_length": 149,
+      "window_length": 125,
       "previous_frame_count": 5,
       "max_frames": 0,
       "decode_tiled": false,
@@ -1221,7 +1211,7 @@
         0
       ],
       "reference_image": [
-        "487",
+        "477",
         0
       ],
       "reference_image_mask": [
@@ -1336,7 +1326,7 @@
   "481": {
     "inputs": {
       "lora_name": "Klein-Migration.safetensors",
-      "strength_model": 1,
+      "strength_model": 0.8,
       "model": [
         "482",
         0
@@ -1370,8 +1360,8 @@
   },
   "484": {
     "inputs": {
-      "seed": 459265747189547,
-      "steps": 8,
+      "seed": 528919544075324,
+      "steps": 15,
       "cfg": 1.5,
       "sampler_name": "euler",
       "scheduler": "simple",
@@ -1401,7 +1391,7 @@
   "485": {
     "inputs": {
       "conditioning": [
-        "489",
+        "525",
         0
       ]
     },
@@ -1430,12 +1420,12 @@
           {
             "name": "A",
             "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_iakpg_00013_.png&type=temp&subfolder=&rand=0.9297928105670794"
+            "url": "/api/view?filename=rgthree.compare._temp_ctjpe_00001_.png&type=temp&subfolder=&rand=0.2554438445830144"
           },
           {
             "name": "B",
             "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_iakpg_00014_.png&type=temp&subfolder=&rand=0.6618438951887982"
+            "url": "/api/view?filename=rgthree.compare._temp_ctjpe_00002_.png&type=temp&subfolder=&rand=0.45671312956057597"
           }
         ]
       },
@@ -1471,7 +1461,7 @@
   },
   "492": {
     "inputs": {
-      "value": "Remove all light from the image make it ver neutral no light from any side \nthen apply the lighting 1000% description to this image , 100000% obligatory keep face looking as it is change light only upscale face\nmake the background black"
+      "value": "Remove all light from the image make it very neutral no light from any side  remove any objects or prople other than the refrence image person\n\nthen apply the lighting 1000% description to this image , 100000% obligatory keep face looking as it is change light only ,\nupscale  the face and the BOdy Make it sharp and OBserved\nRemove other persons or object , or any scence object  except main refrence person\n\n make the background black"
     },
     "class_type": "PrimitiveStringMultiline",
     "_meta": {
@@ -1542,7 +1532,7 @@
   },
   "499": {
     "inputs": {
-      "upscale_method": "lanczos",
+      "upscale_method": "nearest-exact",
       "megapixels": 1,
       "resolution_steps": 1,
       "image": [
@@ -1708,52 +1698,17 @@
       "title": "Scale Image to Total Pixels"
     }
   },
-  "238:140": {
+  "525": {
     "inputs": {
-      "conditioning": [
-        "399",
-        0
-      ],
-      "latent": [
-        "238:141",
+      "text": "not removing objects and persons other than main charchter ",
+      "clip": [
+        "483",
         0
       ]
     },
-    "class_type": "ReferenceLatent",
+    "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "ReferenceLatent"
-    }
-  },
-  "238:141": {
-    "inputs": {
-      "pixels": [
-        "199",
-        0
-      ],
-      "vae": [
-        "117",
-        0
-      ]
-    },
-    "class_type": "VAEEncode",
-    "_meta": {
-      "title": "VAE Encode"
-    }
-  },
-  "238:142": {
-    "inputs": {
-      "conditioning": [
-        "237",
-        0
-      ],
-      "latent": [
-        "238:141",
-        0
-      ]
-    },
-    "class_type": "ReferenceLatent",
-    "_meta": {
-      "title": "ReferenceLatent"
+      "title": "CLIP Text Encode (Prompt)"
     }
   },
   "211:203": {
@@ -1844,6 +1799,54 @@
       ],
       "latent": [
         "173:171",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "238:140": {
+    "inputs": {
+      "conditioning": [
+        "399",
+        0
+      ],
+      "latent": [
+        "238:141",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "238:141": {
+    "inputs": {
+      "pixels": [
+        "199",
+        0
+      ],
+      "vae": [
+        "117",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "238:142": {
+    "inputs": {
+      "conditioning": [
+        "237",
+        0
+      ],
+      "latent": [
+        "238:141",
         0
       ]
     },

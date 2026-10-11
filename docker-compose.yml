@@ -166,6 +166,7 @@ services:
       UI_PORT: "7860"
       OUT_DIR: "/app/outputs"
       GALLERY_DIR: "/app/assets/gallery"
+      DOCS_DIR: "/app/assets/documentation"
 
     volumes:
       # Mounted rather than baked: the UI can be edited and restarted in
@@ -173,6 +174,7 @@ services:
       - ./app:/app/app:ro
       - ./workflows:/app/workflows:ro
       - ./assets/gallery:/app/assets/gallery:ro
+      - ./assets/documentation:/app/assets/documentation:ro
       - ./data/ui_outputs:/app/outputs
 
     # Deliberately not `condition: service_healthy` on the backends: the UI

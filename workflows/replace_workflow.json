@@ -101,19 +101,6 @@
       "title": "DWPose Bone-Ratio Retarget (+hands, motion-canvas output)"
     }
   },
-  "136": {
-    "inputs": {
-      "text_0": "Change the person to a standard pose with the face oriented forward and arms extending straight down by the sides. Hands are visible in the image.",
-      "text": [
-        "134",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍"
-    }
-  },
   "149": {
     "inputs": {
       "image": [
@@ -177,19 +164,6 @@
       "title": "Empty Flux 2 Latent_Retargeted"
     }
   },
-  "164": {
-    "inputs": {
-      "filename_prefix": "PoseKeypoint",
-      "pose_kps": [
-        "135",
-        0
-      ]
-    },
-    "class_type": "SavePoseKpsAsJsonFile",
-    "_meta": {
-      "title": "Save Pose Keypoints"
-    }
-  },
   "167": {
     "inputs": {
       "images": [
@@ -204,7 +178,7 @@
   },
   "168": {
     "inputs": {
-      "text": "10000% follow the POSE limb positions DEPTH ,100000 %Follow the Body facing direction, Strictly follow the Depth. never bleed pose drawing into charchter Dont Change the face and features of the face Make it sharp as the refrence image 100% follow the Refrence upscale the genrated image in good resloution nsont black the charchter lighting keep it good lighting and upscaled \n\nMake the background Black\n",
+      "text": "10000% follow the POSE limb positions DEPTH ,100000 %Follow the Body facing direction, Strictly follow the Depth. never bleed pose drawing into charchter Dont Change the face and features of the face Make it sharp as the refrence image 1000% follow the Refrence upscale the genrated image in good resloution nsont black the charchter lighting keep it good lighting and upscaled \n\nMake the background Black\n",
       "clip": [
         "116",
         0
@@ -261,57 +235,9 @@
       "title": "VAE Decode"
     }
   },
-  "183": {
-    "inputs": {
-      "inputcount": 5,
-      "direction": "right",
-      "match_image_size": false,
-      "Update inputs": null,
-      "image_1": [
-        "377",
-        0
-      ],
-      "image_2": [
-        "188",
-        0
-      ],
-      "image_3": [
-        "4",
-        0
-      ],
-      "image_4": [
-        "167",
-        0
-      ],
-      "image_5": [
-        "179",
-        0
-      ]
-    },
-    "class_type": "ImageConcatMulti",
-    "_meta": {
-      "title": "Image Concatenate Multi"
-    }
-  },
-  "185": {
-    "inputs": {
-      "filename_prefix": "ComfyUI_Retarget",
-      "format": "png",
-      "format.bit_depth": "8-bit",
-      "format.input_color_space": "sRGB",
-      "images": [
-        "183",
-        0
-      ]
-    },
-    "class_type": "SaveImageAdvanced",
-    "_meta": {
-      "title": "Save Image (Advanced)"
-    }
-  },
   "188": {
     "inputs": {
-      "image": "EMXN1y8qTgoGdXBsb2FkEg55bGFiLXN0dW50LXNncBo0YWlfcG9ydGFsLzE3ODg1Mzk4MzAvTGozek9NM1pXQy9mZWFhX2wwXzAwMS0wXzAuanBlZw_360x360 (1).webp"
+      "image": "0a98f6f1b32c1b0f81b1e91ddec1d3fa.jpg"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -397,7 +323,7 @@
   "210": {
     "inputs": {
       "text": [
-        "136",
+        "134",
         0
       ],
       "clip": [
@@ -438,20 +364,6 @@
     "class_type": "KSampler",
     "_meta": {
       "title": "KSampler"
-    }
-  },
-  "233": {
-    "inputs": {
-      "width": 832,
-      "height": 480,
-      "retarget_padding": 16,
-      "body_stick_width": -1,
-      "hand_stick_width": -1,
-      "draw_head": "True"
-    },
-    "class_type": "DrawViTPose",
-    "_meta": {
-      "title": "Draw ViT Pose"
     }
   },
   "234": {
@@ -504,7 +416,7 @@
   "237": {
     "inputs": {
       "text": [
-        "136",
+        "134",
         0
       ],
       "clip": [
@@ -588,7 +500,7 @@
   },
   "310": {
     "inputs": {
-      "text": "human\n",
+      "text": "human",
       "clip": [
         "312",
         1
@@ -794,7 +706,7 @@
   },
   "327": {
     "inputs": {
-      "text": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走 ",
+      "text": "\u8272\u8c03\u8273\u4e3d\uff0c\u8fc7\u66dd\uff0c\u9759\u6001\uff0c\u7ec6\u8282\u6a21\u7cca\u4e0d\u6e05\uff0c\u5b57\u5e55\uff0c\u98ce\u683c\uff0c\u4f5c\u54c1\uff0c\u753b\u4f5c\uff0c\u753b\u9762\uff0c\u9759\u6b62\uff0c\u6574\u4f53\u53d1\u7070\uff0c\u6700\u5dee\u8d28\u91cf\uff0c\u4f4e\u8d28\u91cf\uff0cJPEG\u538b\u7f29\u6b8b\u7559\uff0c\u4e11\u964b\u7684\uff0c\u6b8b\u7f3a\u7684\uff0c\u591a\u4f59\u7684\u624b\u6307\uff0c\u753b\u5f97\u4e0d\u597d\u7684\u624b\u90e8\uff0c\u753b\u5f97\u4e0d\u597d\u7684\u8138\u90e8\uff0c\u7578\u5f62\u7684\uff0c\u6bc1\u5bb9\u7684\uff0c\u5f62\u6001\u7578\u5f62\u7684\u80a2\u4f53\uff0c\u624b\u6307\u878d\u5408\uff0c\u9759\u6b62\u4e0d\u52a8\u7684\u753b\u9762\uff0c\u6742\u4e71\u7684\u80cc\u666f\uff0c\u4e09\u6761\u817f\uff0c\u80cc\u666f\u4eba\u5f88\u591a\uff0c\u5012\u7740\u8d70 ",
       "clip": [
         "308",
         0
@@ -879,7 +791,7 @@
     "inputs": {
       "frame_rate": 24,
       "loop_count": 0,
-      "filename_prefix": "SCAIL-2",
+      "filename_prefix": "CyReplace",
       "format": "video/h264-mp4",
       "pix_fmt": "yuv420p",
       "crf": 19,
@@ -898,7 +810,7 @@
     },
     "class_type": "VHS_VideoCombine",
     "_meta": {
-      "title": "Video Combine 🎥🅥🅗🅢"
+      "title": "Video Combine \ud83c\udfa5\ud83c\udd65\ud83c\udd57\ud83c\udd62"
     }
   },
   "336": {
@@ -938,19 +850,6 @@
     "class_type": "CLIPTextEncode",
     "_meta": {
       "title": "CLIP Text Encode (Positive Prompt)"
-    }
-  },
-  "369": {
-    "inputs": {
-      "text": "",
-      "clip": [
-        "116",
-        0
-      ]
-    },
-    "class_type": "CLIPTextEncode",
-    "_meta": {
-      "title": "CLIP Text Encode (Prompt)"
     }
   },
   "373": {
@@ -1013,7 +912,7 @@
   },
   "384": {
     "inputs": {
-      "video": "#viral #reels #ai #aifaces All r ai generated videos 🧿.mp4",
+      "video": "trimmed_video_20260806_162621.mp4",
       "force_rate": 24,
       "custom_width": 0,
       "custom_height": 0,
@@ -1024,7 +923,7 @@
     },
     "class_type": "VHS_LoadVideo",
     "_meta": {
-      "title": "Load Video (Upload) 🎥🅥🅗🅢"
+      "title": "Load Video (Upload) \ud83c\udfa5\ud83c\udd65\ud83c\udd57\ud83c\udd62"
     }
   },
   "385": {
@@ -1082,7 +981,7 @@
     },
     "class_type": "ImageFromBatch+",
     "_meta": {
-      "title": "🔧 Image From Batch"
+      "title": "\ud83d\udd27 Image From Batch"
     }
   },
   "394": {
@@ -1111,7 +1010,7 @@
   },
   "397": {
     "inputs": {
-      "text": "deformed limbs, unnaturally long arms, elongated legs, warped hands, stretched torso, disproportionate body scaling, changing the original body shape, altering character weight, erasing body fat, thinning out a heavy physique, distorting body proportions, extra joints, mutated fingers, low-resolution artifacts, anatomy distortion, weirdly sized limbs, changing the body mass from the reference image, Changing Face .",
+      "text": "deformed limbs, unnaturally long arms, elongated legs, warped hands, stretched torso, disproportionate body scaling, changing the original body shape, altering character weight, erasing body fat, thinning out a heavy physique, distorting body proportions, extra joints, mutated fingers, low-resolution artifacts, anatomy distortion, weirdly sized limbs, changing the body mass from the reference image, Changing Face \n",
       "clip": [
         "116",
         0
@@ -1235,7 +1134,7 @@
       "attention_mode": "auto",
       "use_torch_compile": false,
       "device": "auto",
-      "preset_prompt": "🪄 Prompt Refine & Expand",
+      "preset_prompt": "\ud83e\ude84 Prompt Refine & Expand",
       "custom_prompt": "in A Narritve way Analyze the provided image and describe ONLY the behavior of light, illumination, and shadows and scene total light reflect on skin color. \n\nStrict Rules:\n1. Do NOT name or describe any specific objects, furniture, architecture, or background elements. \n2. Do NOT describe the character's clothing, physical features, or identity, except for how light and shadow interact with their form (e.g., \"the light hardens the jawline\", \"shadows swallow the left side of the figure\").\n3. Write your response in a single, fluid narrative paragraph (around 7 lines).\n4. Focus heavily on light direction, contrast, ambient glow, the crispness or softness of shadow edges (penumbra), and the overall tonal mood ,skine tone color due to the lighting emphasize your prompt.\n\nOutput only the narrative paragraph. in 7 lines Ver nartive and descriptive\n",
       "max_tokens": 512,
       "temperature": 0.1,
@@ -1243,7 +1142,7 @@
       "num_beams": 1,
       "repetition_penalty": 1.2,
       "frame_count": 1,
-      "keep_model_loaded": true,
+      "keep_model_loaded": false,
       "seed": 91527875,
       "image": [
         "475",
@@ -1288,22 +1187,13 @@
         0
       ],
       "vae": [
-        "478",
+        "117",
         0
       ]
     },
     "class_type": "VAEDecode",
     "_meta": {
       "title": "VAE Decode"
-    }
-  },
-  "478": {
-    "inputs": {
-      "vae_name": "flux2-vae.safetensors"
-    },
-    "class_type": "VAELoader",
-    "_meta": {
-      "title": "Load VAE"
     }
   },
   "479": {
@@ -1328,34 +1218,13 @@
       "lora_name": "Klein-Migration.safetensors",
       "strength_model": 0.8,
       "model": [
-        "482",
+        "113",
         0
       ]
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
       "title": "Load LoRA"
-    }
-  },
-  "482": {
-    "inputs": {
-      "unet_name": "flux-2-klein-base-9b-fp8.safetensors",
-      "weight_dtype": "default"
-    },
-    "class_type": "UNETLoader",
-    "_meta": {
-      "title": "Load Diffusion Model"
-    }
-  },
-  "483": {
-    "inputs": {
-      "clip_name": "qwen_3_8b_fp8mixed.safetensors",
-      "type": "flux2",
-      "device": "default"
-    },
-    "class_type": "CLIPLoader",
-    "_meta": {
-      "title": "Load CLIP"
     }
   },
   "484": {
@@ -1413,36 +1282,6 @@
       "title": "Save Image"
     }
   },
-  "488": {
-    "inputs": {
-      "rgthree_comparer": {
-        "images": [
-          {
-            "name": "A",
-            "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_yxqmr_00061_.png&type=temp&subfolder=&rand=0.37637151504119626"
-          },
-          {
-            "name": "B",
-            "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_yxqmr_00062_.png&type=temp&subfolder=&rand=0.03399577256242459"
-          }
-        ]
-      },
-      "image_a": [
-        "499",
-        0
-      ],
-      "image_b": [
-        "487",
-        0
-      ]
-    },
-    "class_type": "Image Comparer (rgthree)",
-    "_meta": {
-      "title": "Image Comparer (rgthree)"
-    }
-  },
   "489": {
     "inputs": {
       "text": [
@@ -1450,7 +1289,7 @@
         0
       ],
       "clip": [
-        "483",
+        "116",
         0
       ]
     },
@@ -1471,17 +1310,16 @@
   "493": {
     "inputs": {
       "delimiter": ", ",
-      "clean_whitespace": "true",
-      "text_a": [
+      "string_a": [
         "492",
         0
       ],
-      "text_b": [
+      "string_b": [
         "412",
         0
       ]
     },
-    "class_type": "Text Concatenate",
+    "class_type": "StringConcatenate",
     "_meta": {
       "title": "Text Concatenate"
     }
@@ -1493,7 +1331,7 @@
         0
       ],
       "vae": [
-        "478",
+        "117",
         0
       ]
     },
@@ -1581,7 +1419,7 @@
         0
       ],
       "vae": [
-        "478",
+        "117",
         0
       ]
     },
@@ -1601,7 +1439,7 @@
     },
     "class_type": "ImageFromBatch+",
     "_meta": {
-      "title": "🔧 Image From Batch"
+      "title": "\ud83d\udd27 Image From Batch"
     }
   },
   "506": {
@@ -1617,70 +1455,6 @@
     "class_type": "ImageScaleToTotalPixels",
     "_meta": {
       "title": "Scale Image to Total Pixels"
-    }
-  },
-  "509": {
-    "inputs": {
-      "filename_prefix": "Relighted image",
-      "images": [
-        "511",
-        0
-      ]
-    },
-    "class_type": "SaveImage",
-    "_meta": {
-      "title": "Save Image"
-    }
-  },
-  "511": {
-    "inputs": {
-      "inputcount": 2,
-      "Update inputs": null,
-      "image_1": [
-        "499",
-        0
-      ],
-      "image_2": [
-        "487",
-        0
-      ]
-    },
-    "class_type": "ImageBatchMulti",
-    "_meta": {
-      "title": "Image Batch Multi"
-    }
-  },
-  "512": {
-    "inputs": {
-      "filename_prefix": "Relighted",
-      "images": [
-        "511",
-        0
-      ]
-    },
-    "class_type": "SaveImage",
-    "_meta": {
-      "title": "Save Image"
-    }
-  },
-  "514": {
-    "inputs": {
-      "output_file_path": "",
-      "file_name": "",
-      "file_extension": "txt",
-      "overwrite": true,
-      "text": [
-        "493",
-        0
-      ],
-      "image": [
-        "512",
-        0
-      ]
-    },
-    "class_type": "easy saveText",
-    "_meta": {
-      "title": "Save Text"
     }
   },
   "518": {
@@ -1702,45 +1476,13 @@
     "inputs": {
       "text": "not removing objects and persons other than main charchter ",
       "clip": [
-        "483",
+        "116",
         0
       ]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
       "title": "CLIP Text Encode (Prompt)"
-    }
-  },
-  "527": {
-    "inputs": {
-      "filename_prefix": "refrence_mask ",
-      "format": "png",
-      "format.bit_depth": "8-bit",
-      "format.input_color_space": "sRGB",
-      "images": [
-        "322",
-        0
-      ]
-    },
-    "class_type": "SaveImageAdvanced",
-    "_meta": {
-      "title": "Save Image (Advanced)"
-    }
-  },
-  "528": {
-    "inputs": {
-      "filename_prefix": "ComfyUI",
-      "format": "png",
-      "format.bit_depth": "8-bit",
-      "format.input_color_space": "sRGB",
-      "images": [
-        "323",
-        0
-      ]
-    },
-    "class_type": "SaveImageAdvanced",
-    "_meta": {
-      "title": "Save Image (Advanced)"
     }
   },
   "211:203": {

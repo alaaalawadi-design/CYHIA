@@ -166,6 +166,44 @@
   .case .res video { max-height: 780px; }
   @media (max-width: 380px) { .case .hist-grid { grid-template-columns: 1fr; } }
   .case .fname { overflow-wrap: anywhere; }
+
+  /* ── Documentation tab ─────────────────────────────────────────────────── */
+  .guide .disc { margin: 0; font-size: 14px; }
+  .guide .disc dt { font-weight: 600; margin-top: 8px; }
+  .guide .disc dt:first-child { margin-top: 0; }
+  .guide .disc dd { margin: 0; color: var(--muted); }
+
+  #docs h2 { font-size: 22px; letter-spacing: -.02em; margin: 0 0 4px; }
+  .doc-meta { color: var(--muted); margin: 0 0 18px; max-width: 70ch; }
+  .doc-toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; padding: 0; list-style: none; }
+  .doc-toc a {
+    display: block; font-size: 13px; text-decoration: none; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--panel);
+  }
+  .doc-toc a:hover { color: var(--accent); border-color: var(--line-strong); }
+  .doc-sec { margin-bottom: 20px; scroll-margin-top: 16px; }
+  .doc-kicker { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+  .doc-sec > h3 { font-size: 19px; letter-spacing: -.01em; margin: 0 0 8px; }
+  .doc-lead { margin: 0 0 10px; max-width: 78ch; }
+  .doc-points { margin: 0; padding: 0; list-style: none; max-width: 78ch; }
+  .doc-points li { position: relative; padding-left: 18px; margin-bottom: 6px; font-size: 14px; }
+  .doc-points li::before { content: ""; position: absolute; left: 4px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+  .doc-points li.warn::before { background: var(--bad); }
+  .doc-callout { margin: 14px 0 0; padding: 10px 14px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--panel-2); font-size: 14px; }
+  .doc-media { margin-top: 16px; }
+  .doc-media + .doc-media { margin-top: 12px; }
+  .doc-media .cap { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .doc-media .res .stack { display: grid; gap: 10px; }
+  .doc-src { margin-top: 14px; }
+  .doc-src > summary { cursor: pointer; font-size: 13px; color: var(--muted); list-style: none; display: flex; align-items: center; gap: 6px; }
+  .doc-src > summary::-webkit-details-marker { display: none; }
+  .doc-src > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+  .doc-src[open] > summary::before { transform: rotate(90deg); }
+  .doc-src pre {
+    margin: 8px 0 0; padding: 12px; border-radius: 8px; background: var(--panel-2); color: var(--muted);
+    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .doc-foot { color: var(--muted); font-size: 13px; margin: 24px 0 0; max-width: 78ch; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -189,6 +227,7 @@
     <button role="tab" data-tab="replace" aria-selected="true"><span class="dot" data-dot="replace"></span>Replace character</button>
     <button role="tab" data-tab="animate" aria-selected="false"><span class="dot" data-dot="animate"></span>Animate</button>
     <button role="tab" data-tab="history" aria-selected="false">History</button>
+    <button role="tab" data-tab="docs" aria-selected="false">Documentation</button>
   </nav>
 
   <template id="panel-tpl">
@@ -197,11 +236,7 @@
       <p class="blurb"></p>
       <details class="card guide" open>
         <summary>Input guide: how to choose your image and video</summary>
-        <div class="cols">
-          <div><h3>Reference image</h3><ul class="do img-do"></ul><ul class="avoid img-avoid" style="margin-top:8px"></ul></div>
-          <div><h3>Driving video</h3><ul class="do vid-do"></ul><ul class="avoid vid-avoid" style="margin-top:8px"></ul></div>
-          <div><h3>Limits</h3><table class="limits"></table></div>
-        </div>
+        <div class="guide-body"></div>
         <p class="tip"></p>
       </details>
       <div class="grid">
@@ -250,6 +285,22 @@
     <p class="empty" id="hist-empty" hidden>No finished runs yet.</p>
   </section>
 
+  <section id="docs" hidden>
+    <h2>Replacement &amp; Animation — model documentation</h2>
+    <p class="doc-meta">
+      CyShield · AI &amp; Data Science Division. Input criteria, strengths, limitations and worked
+      examples for both models, with the reference image, driving video and result for each case.
+    </p>
+    <ul class="doc-toc" id="doc-toc"></ul>
+    <div id="doc-body"></div>
+    <p class="doc-foot">
+      Recommendations and failure modes come from the internal evaluation of these two models.
+      Failure counts describe that evaluation; they are not general production failure rates.
+      Figures such as the ~15 s stability window and the listed resolutions are observed values,
+      not enforced limits.
+    </p>
+  </section>
+
   <section class="gallery" id="gallery" hidden>
     <h2>Gallery</h2>
     <p class="gallery-sub"></p>
@@ -274,81 +325,133 @@ const store = {
 
 const minutes = s => s < 60 ? `${Math.round(s)} s` : `${(s / 60).toFixed(1)} min`;
 
+// Input criteria from the model documentation (see the Documentation tab), merged with
+// the hard limits this service actually enforces. `limits` is what the pipeline does;
+// `disclaimers` is what the evaluation observed — recommendations, not acceptance rules.
 const GUIDE = {
   replace: {
-    imgDo: ["One person, clearly visible, face and body in frame",
-          "Similar framing to the video (full body for a full-body video, half body for a half body)",
-          "Sharp and evenly lit; the face and outfit are copied from here",
-          "Roughly the same body shape and pose direction as the person you are replacing",
-          "For the best result, match the video's first frame: same body proportions, same depth (distance from camera) and same pose",
-          "Face the camera or a slight angle, like the person in the video's first frame"],
-    imgAvoid: ["Several people, heavy filters or strong shadows across the face",
-             "Sunglasses, masks or hands covering the face",
-             "Tiny or heavily cropped subjects, very low resolution",
-             "Side-profile or head-turned poses: they transfer poorly as a reference",
-             "Very different body proportions or camera distance from the video's first frame (e.g. close-up image with a full-body video)"],
-    vidDo: ["The person you want replaced is the main subject and the closest to the camera",
-          "Fixed or slowly moving camera, the whole body visible for most of the clip",
-          "Good lighting and little motion blur, so the pose can be read",
-          "Original audio is kept and returned with the result",
-          "Start on an easy first frame: a clear, upright, front-facing pose with arms and legs visible"],
-    vidAvoid: ["Crowds: other people are removed, but only the main person is tracked (up to 5 are detected)",
-             "Fast cuts and scene changes; use a single continuous shot",
-             "Objects held in hand: they are removed, so avoid clips where the prop matters",
-             "Heavy occlusion or the subject leaving the frame",
-             "A difficult first frame: extreme pose, motion blur, crossed or hidden limbs, or the person turned away"],
+    imgDo: ["High resolution, with a clear, front-facing face",
+            "Portrait-oriented or half-body framing",
+            "Match the video's first frame: same pose, position, body proportions and framing",
+            "A neutral starting expression",
+            "One person, clearly visible, face and body in frame",
+            "Sharp and evenly lit — the face and outfit are copied from here"],
+    imgAvoid: ["Side-profile or turned-away starting poses: they transfer poorly and can change the face",
+               "Strong expressions such as laughing or crying: they are carried over instead of the neutral features",
+               "A small, distant face, or low image resolution",
+               "Large framing or proportion differences from the video's first frame",
+               "Tight crops that force the body to be outpainted, and added padding (it hallucinates background)",
+               "Several people, heavy filters, strong shadows, sunglasses, masks or hands over the face"],
+    vidDo: ["The person you want replaced faces the camera at the start",
+            "Initial pose, position, framing and proportions matching the reference image",
+            "Portrait-oriented or half-body footage with a clearly visible face",
+            "A single continuous sequence, without cuts or transitions",
+            "The person to replace is the main subject and closest to the camera",
+            "Fixed or slowly moving camera, good lighting, little motion blur",
+            "Original audio is kept and returned with the result"],
+    vidAvoid: ["Fast or frequent transitions and large scene changes: they change the character severely",
+               "A side-facing starting pose or a strong initial facial expression",
+               "A subject too far from the camera for clear facial detail",
+               "Framing that forces the model to invent missing body regions",
+               "Crowds: other people are removed, but only the main person is tracked (up to 5 are detected)",
+               "Objects held in hand: they are removed, so avoid clips where the prop matters",
+               "Heavy occlusion or the subject leaving the frame"],
     limits: [["Image", "PNG, JPG, JPEG, WebP or BMP"],
-           ["Video", "MP4, MOV, WebM, MKV, AVI or M4V"],
-           ["Frame rate", "Resampled to 24 fps"],
-           ["Length", "Up to 1140 frames (about 47 s at 24 fps); longer clips are cut off"],
-           ["Time", "About 3 min plus roughly 3.3 s per frame: a full 1140-frame clip takes 65–70 min"]],
-    tip: "First time? Trim the driving video to a few seconds. A 49-frame test takes about 6 minutes and shows whether the image and video pair well before you commit to an hour-long run. For the best transformation, pick an image whose body proportions, depth and pose match the video's first frame.",
+             ["Video", "MP4, MOV, WebM, MKV, AVI or M4V"],
+             ["Frame rate", "Resampled to 24 fps"],
+             ["Length", "Up to 1040 frames (about 43 s at 24 fps); longer clips are cut off"],
+             ["Time", "About 3 min plus roughly 3.3 s per frame: a full 1040-frame clip takes about 60 min"]],
+    disclaimers: [
+      ["Stable duration", "Strong stability for about 15 seconds. Longer clips still run, but identity drift and colour shifts may gradually appear. This is an observed range, not a hard cap."],
+      ["Identity and styling", "Identity can bleed between characters, and hair, earrings or other jewellery can drift. Some clothing or styling triggers an identity mismatch."],
+      ["Pairing", "Most evaluated cross-gender replacements were handled correctly, but consistency is not guaranteed."],
+      ["Segmentation", "Mask errors can leave stray artifacts, such as dots on a collar, or in rare cases miss the subject entirely — 2 of 66 evaluated samples. Regenerating usually clears it."],
+      ["Relighting", "One relighting failure in 66 evaluated samples."],
+      ["AI-generated characters", "These are handled particularly well, with strong identity consistency and minimal drift."]],
+    tip: "Before you run: put the reference image next to the video's first frame and compare face direction, pose, framing and body proportions. Matching those four is the single clearest quality lever. First time? Trim the driving video to a few seconds — a 49-frame test takes about 6 minutes and tells you whether the pair works before you commit to an hour-long run.",
   },
   animate: {
-    imgDo: ["One character, front or three-quarter view, face clearly visible",
-            "Sharp, evenly lit, uncluttered background",
-            "Pose and framing close to the first frame of the driving video",
-            "Enough of the body in the image for the motion you want (full body for dancing or walking)"],
-    imgAvoid: ["Several people or a face that is small, blurred or covered",
-               "A pose very different from the video's opening pose",
+    imgDo: ["High resolution, with adequate body framing",
+            "Portrait content and a front-facing reference pose",
+            "Starting pose, position and body proportions matching the driving video",
+            "A body appearance close to the driving video's; same-gender pairing reduces body fallback",
+            "One character, face clearly visible, uncluttered background",
+            "Enough of the body in frame for the motion you want (full body for dancing or walking)"],
+    imgAvoid: ["Side-profile reference poses",
+               "Resolution too low to hold mouth and teeth detail — it shows as noise around the mouth",
+               "Tight or inadequate framing, and large body-proportion differences",
+               "A reference pose or position substantially different from the video's first frame",
+               "Several people, or a face that is small, blurred or covered",
                "Heavy stylisation that hides anatomy"],
-    vidDo: ["One person performing the motion, whole body in frame",
-            "Steady camera and a plain, well-lit scene",
-            "Clear limb and face movement; the video's motion and expression are transferred",
-            "Portrait or landscape matching the image gives the cleanest result"],
-    vidAvoid: ["Several people in shot", "Cuts, zooms and fast camera moves",
-               "Motion blur or dark footage", "Limbs leaving the frame"],
+    vidDo: ["Simple, neutral motion at the start, in the same position as the reference image",
+            "Initial pose, framing and body proportions matching the image",
+            "Portrait footage — landscape content performs less well",
+            "Motion that keeps the hands away from the hair and uses no props",
+            "One person performing the motion, whole body in frame",
+            "Steady camera and a plain, well-lit scene"],
+    vidAvoid: ["Complex initial motion, or a starting pose substantially different from the image",
+               "Gestures near the hair, and props",
+               "Body proportions that differ from the intended character",
+               "Several people in shot",
+               "Cuts, zooms and fast camera moves",
+               "Motion blur, dark footage, or limbs leaving the frame"],
     limits: [["Image", "PNG, JPG, JPEG, WebP or BMP"],
              ["Video", "MP4, MOV, WebM, MKV, AVI or M4V"],
              ["Frame rate", "Resampled to 24 fps"],
              ["Length", "Up to 240 frames (about 10 s at 24 fps); longer clips are cut off"],
              ["Time", "About 6 minutes for a 49-frame clip; a full 240-frame clip takes longer"]],
-    tip: "The output is the character from your image performing the video's motion. Choose the video for its motion and the image for its identity; the video's background is not carried over.",
-
-    comparison: {
-      title: "How we compare to Kling",
-      summary: "We tested both on 13+ randomly selected samples and results were comparable overall.",
-      rows: [
-        ["Resolution", "Kling leads"],
-        ["Depth and body mapping", "Ours leads"],
-        ["Motion artifacts (e.g. added objects)", "Ours has fewer"]
-      ],
-      note: "Internal test on 13+ random samples, not a formal benchmark."
-    },
+    disclaimers: [
+      ["Orientation", "Portrait content performs best. Landscape is not a strength."],
+      ["Resolution examples", "1280 × 720, 1080 × 640 and 720 × 480 were used in evaluation. They are the sizes that were tried, not minimums or an exhaustive list."],
+      ["Body fidelity", "The output can hallucinate anatomy, or reproduce the driving video's body instead of the reference character's."],
+      ["Face detail", "Low image resolution shows up as noise around the mouth and teeth."],
+      ["Pairing", "Male-to-male and female-to-female pairing is preferred: when the body is hallucinated, the driving video's character becomes the baseline. A quality recommendation, not a requirement."],
+      ["Initial pose", "A mismatched starting pose can still give a good result, but it is the setup most likely to cause large hallucination."]],
+    tip: "The output is the character from your image performing the video's motion; the video's background is not carried over. Use a clear portrait reference and a driving video that begins in a matching pose with simple motion, and keep gestures away from the hair.",
   },
 };
+
+// Built once per place it is shown: the two service panels and the Documentation tab.
+function guideCols(service) {
+  const g = GUIDE[service];
+  const cols = document.createElement("div");
+  cols.className = "cols";
+  const col = (heading, ...kids) => {
+    const d = document.createElement("div"), h = document.createElement("h3");
+    h.textContent = heading; d.append(h, ...kids); cols.append(d);
+  };
+  const list = (cls, items, gap) => {
+    const ul = document.createElement("ul");
+    ul.className = cls;
+    if (gap) ul.style.marginTop = "8px";
+    for (const t of items) { const li = document.createElement("li"); li.textContent = t; ul.append(li); }
+    return ul;
+  };
+  col("Reference image", list("do", g.imgDo), list("avoid", g.imgAvoid, true));
+  col("Driving video", list("do", g.vidDo), list("avoid", g.vidAvoid, true));
+
+  const table = document.createElement("table");
+  table.className = "limits";
+  for (const [k, v] of g.limits) { const tr = table.insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; }
+  col("Limits", table);
+
+  const dl = document.createElement("dl");
+  dl.className = "disc";
+  for (const [k, v] of g.disclaimers) {
+    const dt = document.createElement("dt"), dd = document.createElement("dd");
+    dt.textContent = k; dd.textContent = v; dl.append(dt, dd);
+  }
+  col("Limitations & disclaimers", dl);
+  return cols;
+}
 
 function makePanel(service) {
   const el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
   el.dataset.panel = service;
   el.querySelector(".blurb").textContent = SERVICES[service];
   const $ = s => el.querySelector(s);
-  const g = GUIDE[service];
-  const fill = (sel, items) => items.forEach(t => { const li = document.createElement("li"); li.textContent = t; $(sel).append(li); });
-  fill(".img-do", g.imgDo); fill(".img-avoid", g.imgAvoid);
-  fill(".vid-do", g.vidDo); fill(".vid-avoid", g.vidAvoid);
-  g.limits.forEach(([k, v]) => { const tr = $(".limits").insertRow(); tr.insertCell().textContent = k; tr.insertCell().textContent = v; });
-  $(".tip").textContent = g.tip;
+  $(".guide-body").append(guideCols(service));
+  $(".tip").textContent = GUIDE[service].tip;
   const files = { image: null, video: null };
   const go = $(".go");
   let busy = false, pollTimer = null;
@@ -483,6 +586,300 @@ function makePanel(service) {
   return el;
 }
 
+// ── documentation ───────────────────────────────────────────────────────────
+// Media lives in assets/documentation/ and is served from /docs-assets (see
+// DOCS_DIR in app/server.py). Each case is one reference image, the driving
+// video it was run against, and the result. A missing file hides its figure
+// rather than leaving a broken frame, so the tab still reads without the media.
+const M = {
+  pose:          { image: "/docs-assets/New%20folder%20%284%29%20-%20Copy/ref_9_yousra_landscape.webp",
+                   video: "/docs-assets/New%20folder%20%284%29%20-%20Copy/test3.mp4",
+                   results: ["/docs-assets/New%20folder%20%284%29%20-%20Copy/Octobre_Edition_Last_Attempt.mp4"] },
+  proportions:   { image: "/docs-assets/New%20folder%20-%20Copy%20%285%29/0a98f6f1b32c1b0f81b1e91ddec1d3fa.jpg",
+                   results: ["/docs-assets/New%20folder%20-%20Copy%20%285%29/Cy_Replace_00057.mp4"] },
+  segmentation:  { image: "/docs-assets/New%20folder%20-%20Copy%20%283%29/5af3b88ff497e9234b354cc58778cee0.jpg",
+                   video: "/docs-assets/New%20folder%20-%20Copy%20%283%29/Video%20Project%2069.mp4",
+                   results: ["/docs-assets/New%20folder%20-%20Copy%20%283%29/Cy_Replace_00015.mp4"] },
+  identityA:     { image: "/docs-assets/New%20folder%20-%20Copy%20%282%29/71a8c5d89c38cc9f0c61baa937a20ad1.jpg",
+                   video: "/docs-assets/New%20folder%20-%20Copy%20%282%29/Video%20Project%2013.mp4",
+                   results: ["/docs-assets/New%20folder%20-%20Copy%20%282%29/Cy_Replace_00055.mp4"] },
+  identityB:     { image: "/docs-assets/New%20folder%20-%20Copy%20%284%29/bf595fa6d7f29b57d785e7a67f562b76.jpg",
+                   results: ["/docs-assets/New%20folder%20-%20Copy%20%284%29/Cy_Replace_00062.mp4"] },
+  animStrength:  { image: "/docs-assets/New%20folder%20%286%29%20-%20Copy/musicians-fl-derula-FLA_DFree_shs_E.jpg",
+                   video: "/docs-assets/New%20folder%20%286%29%20-%20Copy/Video%20Project%2078.mp4",
+                   results: ["/docs-assets/New%20folder%20%286%29%20-%20Copy/Cy_Animate_00004.mp4"] },
+  resolution:    { image: "/docs-assets/New%20folder%20-%20Copy/Screenshot%202025-12-01%20170625.png",
+                   video: "/docs-assets/New%20folder%20-%20Copy/Video%20Project%2071.mp4",
+                   results: ["/docs-assets/New%20folder%20-%20Copy/Cy_Animate_00018.mp4",
+                             "/docs-assets/New%20folder%20-%20Copy/Cy_Animate_00017.mp4",
+                             "/docs-assets/New%20folder%20-%20Copy/Cy_Animate_00012.mp4"] },
+  poseMismatch:  { image: "/docs-assets/New%20folder%20%284%29/setting_ai_chinesse.jpg",
+                   video: "/docs-assets/New%20folder%20%284%29/Download%20%281%29.mp4",
+                   results: ["/docs-assets/New%20folder%20%284%29/Cy_Animate_00009.mp4"] },
+  hallucination: { image: "/docs-assets/New%20folder%20%282%29/ref_Sowsan.jpg",
+                   video: "/docs-assets/New%20folder%20%282%29/717f1276-68e7-4788-b408-763d70edc052.mp4",
+                   results: ["/docs-assets/New%20folder%20%282%29/Cy_Animate_00019.mp4"] },
+  bodyTransfer:  { image: "/docs-assets/New%20folder%20%285%29%20-%20Copy/bf595fa6d7f29b57d785e7a67f562b76.jpg",
+                   video: "/docs-assets/New%20folder%20%285%29%20-%20Copy/Download%20%282%29.mp4",
+                   results: ["/docs-assets/New%20folder%20%285%29%20-%20Copy/Cy_Animate_00014.mp4"] },
+  goodA:         { image: "/docs-assets/New%20folder%20-%20Copy%20%286%29/EMXN1y8qWAoGdXBsb2FkEg55bGFiLXN0dW50LXNncBo-YWlfcG9ydGFsLzE3OTAwMTQ1ODgvbHBGWVdFcFVVdi9maWxlXzAwMDAwMDAwYzQ0ODgyMGU4MWNmYS5wbmc_360x360.webp",
+                   video: "/docs-assets/New%20folder%20-%20Copy%20%286%29/i%20feel%20like%20a%20corpse%20in%20this%20lighting.mp4",
+                   results: ["/docs-assets/New%20folder%20-%20Copy%20%286%29/Cy_Animate_00011.mp4"] },
+  goodB:         { image: "/docs-assets/New%20folder/27d9c9001fc75d142277df8b60b4eff0.jpg",
+                   video: "/docs-assets/New%20folder/1776081765330.publer.com.mp4",
+                   results: ["/docs-assets/New%20folder/Cy_Animate_00010.mp4"] },
+  goodC:         { image: "/docs-assets/New%20folder%20%283%29/EMXN1y8qWAoGdXBsb2FkEg55bGFiLXN0dW50LXNncBo-YWlfcG9ydGFsLzE3OTA0MzUzMTkvOVNvMFAzUXRWby8yMDI2XzEwXzAzXzE1XzA3XzE4LTMxYjE2LmpwZWc_360x360.webp",
+                   video: "/docs-assets/New%20folder%20%283%29/AQNiznvKi7i_UVuWGRMuTy_UL2AVs4IZAFNla0t4etfNA9sMk6RiD3iwpM19nMaqFsTy572i_HxWE8PRYxbbdE_8nYEjqZ_WEhpTs39NHA.mp4",
+                   results: ["/docs-assets/New%20folder%20%283%29/Cy_Animate_00007.mp4"] },
+};
+
+const DOCS = [
+  { id: "doc-overview", kicker: "Overview", title: "What these two models do", nav: "Overview",
+    lead: "CyShield · AI & Data Science Division. An evaluation of character replacement and animation " +
+          "across input criteria, accuracy, challenges and demos. The sections below record the " +
+          "qualitative findings and the examples behind them.",
+    points: [
+      "Replacement puts the character from your reference image into an existing video, keeping that video's motion, scene and audio.",
+      "Animation drives the character in your reference image with the motion of a driving video; the driving video's background is not carried over.",
+      "Everything below is a quality recommendation derived from evaluation runs, not an acceptance rule enforced by the service.",
+    ] },
+
+  { id: "doc-criteria", kicker: "Input guide", title: "How to choose your image and video", nav: "Input criteria",
+    lead: "The same criteria shown on the Replace and Animate tabs, side by side. ✓ marks recommendations, " +
+          "✕ marks inputs to avoid. “Limits” is what the pipeline enforces; “Limitations & disclaimers” is " +
+          "what the evaluation observed.",
+    guides: ["replace", "animate"] },
+
+  { id: "doc-reading", kicker: "Reading notes", title: "What this evaluation does and does not establish", nav: "Reading notes",
+    points: [
+      "Recommendations, not hard limits: the ~15-second replacement window is an observed stability range, and the three animation resolutions are the sizes that were tried. Neither should become an unconditional rejection rule without further validation.",
+      "Evidence is evaluation-specific: the segmentation discussion cites 2 of 66 samples, relighting 1 of 66. No general accuracy percentage, hardware benchmark or detailed test protocol is supplied.",
+      "Not defined by the evaluation: accepted file formats, maximum upload size, video codec, strict image dimensions, maximum animation duration, GPU/VRAM requirements and inference latency. The format, length and timing figures in the input guide come from this service's own pipeline instead.",
+    ] },
+
+  { id: "doc-replace-strengths", kicker: "Replacement", title: "Strengths", nav: "Replacement strengths",
+    lead: "Portrait-oriented and half-body content produces effective character transfer, with strong " +
+          "stability for approximately 15 seconds. Longer sequences are possible, but identity drift and " +
+          "colour changes may gradually appear.",
+    points: [
+      "AI-generated characters show strong identity consistency and generally minimal drift.",
+      "Comparable results to Kling Replacement under similar conditions — AI-generated characters, matching initial position and pose. Both can produce motion hallucinations or artifacts, and both drift significantly after roughly 15 seconds, or sooner with frequent or large transitions.",
+    ],
+    callout: "The Kling comparison is a qualitative side-by-side from this evaluation, not an independently reproduced benchmark.",
+    source: "Portrait Character Replacement: Our solution handles character transfer effectively in portrait-oriented content and half body samples, with strong stability for up to ~15 seconds. Longer sequences are possible, but identity drift and color changes may gradually appear.\n\nAI-Generated Characters: Our solution handles AI-generated characters particularly well, with these characters showing strong identity consistency and generally minimal drift during replacement.\n\nNote: We reviewed Kling Replacement and found that its strength is also particularly noticeable with AI-generated characters and frames starting from a similar position and pose. We tested our model under similar conditions and observed comparable results. Both solutions can occasionally produce motion hallucinations or artifacts. For longer sequences, both Kling and our solution can experience significant drift after ~15 seconds, while sequences with frequent or large transitions may show these issues earlier." },
+
+  { id: "doc-replace-pose", kicker: "Replacement · limitation", title: "Pose and expression", nav: "Pose & expression",
+    lead: "Both the person in the video and the person in the reference image must face the camera. " +
+          "Side poses do not work well and can change the facial identity.",
+    points: [
+      "Avoid starting on a strong expression such as laughing or crying: the expression is transferred instead of the person's neutral facial features being recovered.",
+    ],
+    media: [{ key: "pose", cap: "A landscape reference against a landscape driving video. The result is shown side by side with the original." }],
+    source: "Pose: Side poses do not work well in replacement, and the face may change — in both video and reference image the two persons have to face the camera. Also, faces starting with hard expressions like laughing or crying: the model won't get their real face features, they will be transferred like that." },
+
+  { id: "doc-replace-transitions", kicker: "Replacement · limitation", title: "Transitions", nav: "Transitions",
+    lead: "Transitions change the character severely. Use a single continuous shot.",
+    points: [
+      "The failure most often seen here combines two causes at once: a side-facing starting pose and a cut partway through, giving a wrong or drifted character.",
+    ],
+    source: "Transitions will cause the character to change severely, so try to not add video transitions. Here for example the video contains 2 causes of failures: pose side starting, so character will be wrong or drifted, and transitions." },
+
+  { id: "doc-replace-proportions", kicker: "Replacement · limitation", title: "Proportions, framing and padding", nav: "Proportions & padding",
+    lead: "Proportion match between source and target has a major impact on output quality — mismatched " +
+          "proportions are the most common cause of visible degradation.",
+    points: [
+      "When the subject is framed tightly, the model sometimes fails to outpaint the body. Keeping the same proportions between source and target mitigates this.",
+      "Padding the frame causes background hallucination, in the same way outpainting does.",
+    ],
+    media: [{ key: "proportions", cap: "Reference image and result. Compare the framing of the reference with the generated half of the output." }],
+    source: "3. Proportions and framing: Proportion match between source and target has a major impact on output quality. Mismatched proportions are the most common cause of visible degradation. When the subject is framed tightly, the model sometimes fails to outpaint the body. Keeping the same proportions between source and target mitigates this.\n\n4. Padding the frame can cause background hallucination, similar to outpainting artifacts." },
+
+  { id: "doc-replace-segmentation", kicker: "Replacement · limitation", title: "Segmentation", nav: "Segmentation",
+    lead: "Occasional mask errors appear as stray artifacts, such as dots on a collar or lapel. In rare " +
+          "edge cases the full subject is missed.",
+    points: [
+      "Observed in 2 of 66 evaluated samples. Regenerating the output usually clears it.",
+      "That count describes this evaluation; it is not a guaranteed production failure rate.",
+    ],
+    media: [{ key: "segmentation", cap: "Reference image, driving video and the side-by-side result." }],
+    source: "5. Segmentation: Occasional mask errors appear as stray artifacts, such as dots on the collar or lapel. In rare edge cases, the full subject is missed — this is an example of full subject. However this can be overcome by regenerating. Usually happens 2/66 samples." },
+
+  { id: "doc-replace-identity", kicker: "Replacement · limitation", title: "Identity and attribute fidelity", nav: "Identity & attributes",
+    lead: "Identity can bleed between characters. Most evaluated male-to-female and female-to-male " +
+          "replacements were handled correctly.",
+    points: [
+      "Some cases show subtle drift in hair, or in accessories such as earrings and jewellery — not consistently.",
+      "A male subject in styling the model reads as stereotypically feminine — a dress, a theatrical costume, a ponytail — may be rendered as female or blended, producing a significant identity mismatch.",
+    ],
+    callout: "That last point is a reported model failure and bias. It is not a rule about a person's identity, and not a reason to reject a user's input.",
+    media: [
+      { key: "identityA", cap: "Cross-gender replacement handled correctly: reference, driving video, side-by-side result." },
+      { key: "identityB", cap: "A second case, reference image and result." },
+    ],
+    source: "6. Identity and attribute fidelity. Character blending: Identity bleed can occur between characters in some samples. Cross-gender replacement: Most male-to-female and female-to-male cases are handled correctly. In some cases, subtle drift appears in hair or in accessories such as earrings and jewelry, though not consistently. Gender-atypical styling: When a male subject has stereotypically feminine styling (a dress, theatrical costume, or ponytail), the output may be rendered as female or blended, producing a significant identity mismatch." },
+
+  { id: "doc-replace-relighting", kicker: "Replacement · limitation", title: "Relighting", nav: "Relighting",
+    lead: "In 1 of 66 evaluated samples relighting failed and generated the same person throughout.",
+    points: ["The evaluation does not give a more detailed definition of this failure."],
+    source: "7. Relighting: In 1 of 66 evaluated samples, relighting failed and generated the same person throughout." },
+
+  { id: "doc-replace-good", kicker: "Replacement", title: "What a good input looks like", nav: "Good replacement inputs",
+    lead: "The three things every clean replacement run in this evaluation had in common:",
+    points: [
+      "The same pose in image and video, both facing the camera.",
+      "The subject close enough to the camera that the face is clear.",
+      "Excellent image resolution. No numeric minimum was established.",
+    ],
+    callout: "The Replace tab's Gallery shows worked examples with the same three properties.",
+    source: "Our examples for input criteria: same pose facing camera; not far away from camera, face is clear; image resolution is excellent." },
+
+  { id: "doc-animate-strengths", kicker: "Animation", title: "Strengths", nav: "Animation strengths",
+    lead: "Portrait content performs best. Landscape is not a strength.",
+    media: [{ key: "animStrength", cap: "A portrait reference and a portrait driving video — the configuration that performs best." }],
+    source: "Strengths: Portrait content performs best. Landscape is not a strength." },
+
+  { id: "doc-animate-criteria", kicker: "Animation", title: "Input criteria, summed up", nav: "Animation criteria",
+    points: [
+      "Use high-resolution sources with adequate framing.",
+      "Match pose and body proportions between source and target, or the model hallucinates and falls back to the video's character.",
+      "Avoid side poses in the reference image.",
+      "Start the animation with simple, neutral motion, in the same position as the source image.",
+      "Avoid hair-adjacent gestures and props.",
+      "Prefer male-to-male and female-to-female pairing: if the body is hallucinated, the driving video's character becomes the baseline.",
+    ],
+    callout: "The pairing preference is a quality recommendation that follows from a model limitation, not a mandatory eligibility rule.",
+    source: "Summing up input criteria: Use high-resolution sources with adequate framing. Match pose and body proportions between source and target or model will hallucinate falling to the video character. Avoid side poses in reference. Start animation with simple, neutral motion in the same position as the source. Avoid hair-adjacent gestures and props in animation. Preferred to do male to male and female to female, as if model hallucinated the body it will make the reference video character as its baseline." },
+
+  { id: "doc-animate-resolution", kicker: "Animation", title: "Resolution examples", nav: "Resolutions",
+    lead: "Three image-resolution options were used in evaluation: 1280 × 720, 1080 × 640 and 720 × 480.",
+    points: [
+      "These are the sizes that were tried. They are not minimums, and not an exhaustive list of what the model supports.",
+      "Portrait content is recommended elsewhere in this evaluation, so confirm the intended orientation before turning these into validation rules.",
+    ],
+    media: [{ key: "resolution", cap: "One reference and one driving video run at the three sizes.",
+              resultLabels: ["Result · 1280 × 720", "Result · 1080 × 640", "Result · 720 × 480"] }],
+    source: "image resolution options 1280x720 or 1080x640 or 720x480" },
+
+  { id: "doc-animate-mouth", kicker: "Animation · limitation", title: "Mouth and teeth artifacts", nav: "Mouth & teeth",
+    lead: "Noise in the teeth and mouth, caused by poor image resolution in the reference.",
+    points: ["The fix is on the input side: a sharper reference image in which mouth and teeth detail survives."],
+    source: "example of noise in teeth and mouth due to bad image resolution" },
+
+  { id: "doc-animate-posemismatch", kicker: "Animation · limitation", title: "Initial pose mismatch", nav: "Initial pose mismatch",
+    lead: "A run whose starting poses did not match still gave a reasonably good result — but this is the " +
+          "setup most likely to produce a large hallucination.",
+    points: ["Matching the initial pose remains the recommended setup, even though a mismatch does not always fail."],
+    media: [{ key: "poseMismatch", cap: "Reference and driving video start in different poses; the result still holds up." }],
+    source: "example of not starting with the same pose — the result was pretty good but sometimes may cause a huge hallucination" },
+
+  { id: "doc-animate-hallucination", kicker: "Animation · limitation", title: "Body hallucination", nav: "Body hallucination",
+    lead: "Generated body appearance falls back to the body in the driving video instead of the reference character's.",
+    media: [{ key: "hallucination", cap: "Note how the generated body follows the driving video rather than the reference image." }],
+    source: "example for body hallucination — note how it falls to the video body" },
+
+  { id: "doc-animate-bodytransfer", kicker: "Animation · limitation", title: "Reference-body transfer", nav: "Reference-body transfer",
+    lead: "A second case of the same failure: the driving video's body is reproduced rather than the " +
+          "intended character's body being preserved.",
+    points: ["This is the reason same-gender pairing is preferred — it makes the fallback much less visible."],
+    media: [{ key: "bodyTransfer", cap: "Reference image, driving video and result." }],
+    source: "example for doing the body as the reference video" },
+
+  { id: "doc-animate-good", kicker: "Animation", title: "What a good input looks like", nav: "Good animation inputs",
+    lead: "Portrait reference, portrait driving video, matching starting pose, simple motion and no props. " +
+          "These are the runs that came out clean.",
+    media: [
+      { key: "goodA", cap: "Portrait reference with a matching portrait driving video." },
+      { key: "goodB", cap: "A square reference, front-facing, with simple motion." },
+      { key: "goodC", cap: "A third clean run at the same settings." },
+    ],
+    source: "Animation: example of good input" },
+];
+
+function docFigure(label, tag, src, cls) {
+  if (!src) return null;
+  const f = document.createElement("figure");
+  if (cls) f.className = cls;
+  const c = document.createElement("figcaption");
+  c.textContent = label;
+  const m = document.createElement(tag);
+  m.src = src;
+  if (tag === "video") { m.controls = true; m.muted = true; m.loop = true; m.playsInline = true; m.preload = "metadata"; }
+  else { m.loading = "lazy"; m.alt = label; }
+  // Media is a local, gitignored directory: if it is absent the tab still reads.
+  m.addEventListener("error", () => f.remove());
+  f.append(c, m);
+  return f;
+}
+
+function docMedia({ key, cap, resultLabels }) {
+  const m = M[key];
+  if (!m) return null;
+  const card = document.createElement("article");
+  card.className = "card case doc-media";
+  if (cap) { const p = document.createElement("p"); p.className = "cap"; p.textContent = cap; card.append(p); }
+  const grid = document.createElement("div");
+  grid.className = "hist-grid";
+  const ins = document.createElement("div");
+  ins.className = "ins";
+  for (const f of [docFigure("Reference image", "img", m.image), docFigure("Driving video", "video", m.video)]) if (f) ins.append(f);
+  const res = document.createElement("div");
+  res.className = "res";
+  const stack = document.createElement("div");
+  stack.className = "stack";
+  m.results.forEach((src, i) => {
+    const f = docFigure((resultLabels && resultLabels[i]) || "Result", "video", src);
+    if (f) stack.append(f);
+  });
+  res.append(stack);
+  if (ins.children.length) grid.append(ins); else grid.style.gridTemplateColumns = "1fr";
+  grid.append(res);
+  card.append(grid);
+  return card;
+}
+
+let docsBuilt = false;
+function buildDocs() {
+  if (docsBuilt) return;
+  docsBuilt = true;
+  const body = document.getElementById("doc-body"), toc = document.getElementById("doc-toc");
+  for (const sec of DOCS) {
+    const li = document.createElement("li"), a = document.createElement("a");
+    a.href = `#${sec.id}`; a.textContent = sec.nav; li.append(a); toc.append(li);
+
+    const el = document.createElement("section");
+    el.className = "card doc-sec"; el.id = sec.id;
+    const k = document.createElement("p"); k.className = "doc-kicker"; k.textContent = sec.kicker;
+    const h = document.createElement("h3"); h.textContent = sec.title;
+    el.append(k, h);
+    if (sec.lead) { const p = document.createElement("p"); p.className = "doc-lead"; p.textContent = sec.lead; el.append(p); }
+    if (sec.points) {
+      const ul = document.createElement("ul"); ul.className = "doc-points";
+      for (const t of sec.points) { const li2 = document.createElement("li"); li2.textContent = t; ul.append(li2); }
+      el.append(ul);
+    }
+    if (sec.guides) {
+      for (const service of sec.guides) {
+        const d = document.createElement("details"); d.className = "guide"; d.open = true;
+        d.style.marginTop = "16px";
+        const sum = document.createElement("summary");
+        sum.textContent = service === "replace" ? "Replacement — input guide" : "Animation — input guide";
+        const wrap = document.createElement("div"); wrap.append(guideCols(service));
+        const tip = document.createElement("p"); tip.className = "tip"; tip.textContent = GUIDE[service].tip;
+        d.append(sum, wrap, tip); el.append(d);
+      }
+    }
+    if (sec.callout) { const p = document.createElement("p"); p.className = "doc-callout"; p.textContent = sec.callout; el.append(p); }
+    for (const spec of sec.media || []) { const node = docMedia(spec); if (node) el.append(node); }
+    if (sec.source) {
+      const d = document.createElement("details"); d.className = "doc-src";
+      const sum = document.createElement("summary"); sum.textContent = "Original wording";
+      const pre = document.createElement("pre"); pre.textContent = sec.source;
+      d.append(sum, pre); el.append(d);
+    }
+    body.append(el);
+  }
+}
+
 // ── tabs ────────────────────────────────────────────────────────────────────
 const panels = document.getElementById("panels");
 for (const s of Object.keys(SERVICES)) panels.append(makePanel(s));
@@ -568,14 +965,17 @@ document.getElementById("hist-filter").addEventListener("change", renderHistory)
 function selectTab(name) {
   document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
   document.querySelectorAll("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== name);
-  const isHist = name === "history";
+  const isHist = name === "history", isDocs = name === "docs";
   document.getElementById("history").hidden = !isHist;
-  if (isHist) { document.getElementById("gallery").hidden = true; loadHistory(); }
+  document.getElementById("docs").hidden = !isDocs;
+  if (isDocs) { document.getElementById("gallery").hidden = true; buildDocs(); }
+  else if (isHist) { document.getElementById("gallery").hidden = true; loadHistory(); }
   else loadGallery(name);
   store.set("tab", name);
 }
 document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => selectTab(b.dataset.tab)));
-selectTab(SERVICES[store.get("tab")] || store.get("tab") === "history" ? store.get("tab") : "replace");
+const TABS = [...Object.keys(SERVICES), "history", "docs"];
+selectTab(TABS.includes(store.get("tab")) ? store.get("tab") : "replace");
 
 // ── backend status ──────────────────────────────────────────────────────────
 // Polled so a tab shows as offline before anyone presses Generate.

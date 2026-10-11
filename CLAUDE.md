@@ -85,6 +85,8 @@ scripts/smoke.py                     one end-to-end job, either service; --check
 workflows/            replace_workflow_src.json (as exported) -> replace_workflow.json (used)
 docker/               Dockerfile.replace, Dockerfile.ui, entrypoint-comfy.sh, lock files
 data/                 bind-mount targets (gitignored): per-service input/output/temp
+assets/documentation/ stills and clips for the Documentation tab (gitignored), served at
+                      /docs-assets; assets/gallery/ is the per-tab Gallery, served at /gallery
 ```
 
 ## Workflow node ids
@@ -104,25 +106,28 @@ still validates that they exist.
 
 ## Editing the replacement workflow
 
-> **The two files have drifted (as of 2026-10-06). Do not run the hardener before reading this.**
-> `replace_workflow.json` was committed in c775706 as a hand-tuned raw export that never went
-> through `harden_replace_workflow.py`, and `replace_workflow_src.json` was not updated to match.
-> The service therefore runs an **unhardened** graph: node `411` still has
-> `keep_model_loaded=True`, the duplicate loaders and ~17 debug/inert nodes are still present, and
-> node `514` (`easy saveText`) writes into the working directory on every run.
+> **The drift is resolved (2026-10-06).** `replace_workflow_src.json` is now the re-export of the
+> tuned graph, and `replace_workflow.json` was regenerated from it by `harden_replace_workflow.py`.
+> The service runs a **hardened** 108-node graph again; `--check` passes with 0 inert nodes and all
+> 37 classes resolve against `comfy-replace`. Running the hardener is safe — it is idempotent and
+> no longer reverts anything.
 >
-> Regenerating from the current source would **revert live tuning**: `484.steps` 15→8,
-> `408.window_length` 125→149, `481.strength_model` 0.8→1, `311`/`317.detection_threshold`
-> 0.5→0.61, `499.upscale_method` `nearest-exact`→`lanczos`, three prompt strings, and the loss of
-> nodes `525`/`527`/`528`. To fix the drift properly, re-export the tuned graph over the source
-> file first, then harden.
+> The tuned values the old source would have reverted are now *in* the source: `484.steps` 15,
+> `408.window_length` 125, `481.strength_model` 0.8, `311`/`317.detection_threshold` 0.5,
+> `499.upscale_method` `nearest-exact`, node `525` present, `384.frame_load_cap` 1040. Nodes `527`
+> and `528` (debug `SaveImageAdvanced` of the mask previews, consumed by nothing) are gone with the
+> re-export, as are the duplicate loaders — `482`→`113`, `483`→`116`, `478`→`117`, so the Klein 9B
+> UNET, the Qwen 8B CLIP and the Flux2 VAE each load once instead of twice.
 >
-> Hardening the *tuned* graph was checked for output safety: comparing the compute DAG from node
-> `335` node by node, the only semantic change is node `493`, where was-ns `Text Concatenate`
+> One semantic nuance survives from hardening: node `493`, where was-ns `Text Concatenate`
 > (`clean_whitespace=true`, which strips each operand and drops empty ones) becomes core
 > `StringConcatenate` (a plain `delimiter.join`). The `", "` delimiter is preserved and `492` has
 > no stray whitespace, so the only possible difference is trailing whitespace from the QwenVL
 > output — almost certainly invisible to the tokenizer, but not provably identical.
+>
+> **Note `487` is no longer in the data path.** The tuned graph feeds `317.images`, `331.image` and
+> `408.reference_image` from `477` (the VAE decode) rather than from the `SaveImage` node, so the
+> old trap note below applies only to `500`.
 
 Edit `replace_workflow_src.json` (or replace it with a fresh export), then:
 
@@ -137,8 +142,9 @@ QwenVL `keep_model_loaded=False`, duplicate loader merges, debug-output removal,
 substitution, pass-through bypass, and pruning of nodes ComfyUI would never execute.
 
 **Traps when editing this graph:**
-- `487` and `500` look like debug `SaveImage` nodes but their **image output is consumed
-  downstream**. Removing them breaks the pipeline.
+- `500` looks like a debug `SaveImage` node but its **image output is consumed downstream**
+  (`499.image`). Removing it breaks the pipeline. `487` was in the same position before the
+  2026-10-06 re-export and no longer is.
 - `167`, `208`, `235`, `377` are `PreviewImage` nodes used as **pass-throughs in the data path**.
 - `412` is `PreviewAny`, which passes STRING through in this ComfyUI version.
 - Inert nodes are not harmless: each drags in its custom node (node `233` alone pulled in
@@ -231,7 +237,7 @@ Run these with a venv that has `httpx` and `websocket-client` — `../venv/bin/p
 ## Timings (measured, 49-frame runs)
 
 - **replace**: ~3 min fixed (the Flux2 Klein stages) + **~3.3 s/frame** (`WanSCAILInfinity`,
-  windowed at 149 frames so VRAM stays bounded). The default 1140-frame cap ⇒ **65–70 min/job**.
+  windowed at 125 frames so VRAM stays bounded). The default 1040-frame cap ⇒ **about 60 min/job**.
 - **animate**: 6.3 min for 49 frames.
 
 UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower them.
@@ -264,7 +270,18 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
   and only then get their final name. Nothing half-finished is ever visible to `/api/history`.
   The folder is removed per job, and the whole `incoming/` tree is cleared at startup to catch a
   container killed mid-download.
-- **The first `TRIM_FRAMES` frames are cut off each result** (10 for both services, so 0.42 s at
+- **The UI has four tabs**: Replace, Animate, History and Documentation. The Documentation tab
+  is the model evaluation — input criteria, strengths, limitations and worked examples — written
+  as plain data (`DOCS`) in `index.html` and rendered on first open. Its media comes from
+  `assets/documentation/` via `DOCS_DIR`, mounted read-only and served at `/docs-assets`. Each
+  case is one reference image, the driving video it was run against, and the result; a figure
+  whose file is missing removes itself, so the tab still reads with the directory absent.
+- **The two tabs' input criteria and the Documentation tab share one source**, `GUIDE` in
+  `index.html`, rendered by `guideCols()`. `limits` there is what the pipeline enforces (formats,
+  frame cap, timings); `disclaimers` is what the evaluation observed — a ~15 s stability window,
+  the three animation resolutions, 2/66 segmentation and 1/66 relighting failures. Those are
+  recommendations, not acceptance rules: do not turn them into upload validation.
+- **The first `TRIM_FRAMES` frames are cut off each result** (6 for both services, so 0.25 s at
   the workflows' 24 fps) to drop warm-up frames, and the saved driving video is cut by the same
   **duration** — not the same frame count, since the upload's native rate is usually not 24.
   This needs `ffmpeg` and `ffprobe`, which `Dockerfile.ui` installs; without them the server logs
