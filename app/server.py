@@ -70,7 +70,7 @@ KEEP_FINISHED = 200
 # Warm-up frames cut from the start of the result AND of the saved input video,
 # per service. 0 turns trimming off for that service. At the workflows' 24 fps
 # these 6 frames are 0.25 s.
-TRIM_FRAMES = {"replace": 6, "animate": 6}
+TRIM_FRAMES = {"replace": 10, "animate": 10}
 
 BACKENDS = {
     "animate": ComfyClient(
