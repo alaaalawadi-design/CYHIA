@@ -103,7 +103,7 @@
   },
   "136": {
     "inputs": {
-      "text_0": "Change the person to a standard T-pose (facing forward with arms extended). Hands are visible in the image.",
+      "text_0": "Change the person to a standard pose with the face oriented forward and arms extending straight down by the sides. Hands are visible in the image.",
       "text": [
         "134",
         0
@@ -204,7 +204,7 @@
   },
   "168": {
     "inputs": {
-      "text": "10000% follow the POSE limb positions DEPTH ,100000 %Follow the Body facing direction, Strictly follow the Depth. never bleed pose drawing into charchter Dont Change the face and features of the face Make it sharp as the refrence image 1000% follow the Refrence upscale the genrated image in good resloution nsont black the charchter lighting keep it good lighting and upscaled \n\nMake the background Black\n",
+      "text": "10000% follow the POSE limb positions DEPTH ,100000 %Follow the Body facing direction, Strictly follow the Depth. never bleed pose drawing into charchter Dont Change the face and features of the face Make it sharp as the refrence image 100% follow the Refrence upscale the genrated image in good resloution nsont black the charchter lighting keep it good lighting and upscaled \n\nMake the background Black\n",
       "clip": [
         "116",
         0
@@ -311,7 +311,7 @@
   },
   "188": {
     "inputs": {
-      "image": "0a98f6f1b32c1b0f81b1e91ddec1d3fa.jpg"
+      "image": "EMXN1y8qTgoGdXBsb2FkEg55bGFiLXN0dW50LXNncBo0YWlfcG9ydGFsLzE3ODg1Mzk4MzAvTGozek9NM1pXQy9mZWFhX2wwXzAwMS0wXzAuanBlZw_360x360 (1).webp"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -588,7 +588,7 @@
   },
   "310": {
     "inputs": {
-      "text": "human",
+      "text": "human\n",
       "clip": [
         "312",
         1
@@ -1013,7 +1013,7 @@
   },
   "384": {
     "inputs": {
-      "video": "trimmed_video_20260806_162621.mp4",
+      "video": "#viral #reels #ai #aifaces All r ai generated videos 🧿.mp4",
       "force_rate": 24,
       "custom_width": 0,
       "custom_height": 0,
@@ -1111,7 +1111,7 @@
   },
   "397": {
     "inputs": {
-      "text": "deformed limbs, unnaturally long arms, elongated legs, warped hands, stretched torso, disproportionate body scaling, changing the original body shape, altering character weight, erasing body fat, thinning out a heavy physique, distorting body proportions, extra joints, mutated fingers, low-resolution artifacts, anatomy distortion, weirdly sized limbs, changing the body mass from the reference image, Changing Face \n",
+      "text": "deformed limbs, unnaturally long arms, elongated legs, warped hands, stretched torso, disproportionate body scaling, changing the original body shape, altering character weight, erasing body fat, thinning out a heavy physique, distorting body proportions, extra joints, mutated fingers, low-resolution artifacts, anatomy distortion, weirdly sized limbs, changing the body mass from the reference image, Changing Face .",
       "clip": [
         "116",
         0
@@ -1420,12 +1420,12 @@
           {
             "name": "A",
             "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_ctjpe_00001_.png&type=temp&subfolder=&rand=0.2554438445830144"
+            "url": "/api/view?filename=rgthree.compare._temp_yxqmr_00061_.png&type=temp&subfolder=&rand=0.37637151504119626"
           },
           {
             "name": "B",
             "selected": true,
-            "url": "/api/view?filename=rgthree.compare._temp_ctjpe_00002_.png&type=temp&subfolder=&rand=0.45671312956057597"
+            "url": "/api/view?filename=rgthree.compare._temp_yxqmr_00062_.png&type=temp&subfolder=&rand=0.03399577256242459"
           }
         ]
       },
@@ -1709,6 +1709,38 @@
     "class_type": "CLIPTextEncode",
     "_meta": {
       "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "527": {
+    "inputs": {
+      "filename_prefix": "refrence_mask ",
+      "format": "png",
+      "format.bit_depth": "8-bit",
+      "format.input_color_space": "sRGB",
+      "images": [
+        "322",
+        0
+      ]
+    },
+    "class_type": "SaveImageAdvanced",
+    "_meta": {
+      "title": "Save Image (Advanced)"
+    }
+  },
+  "528": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "format": "png",
+      "format.bit_depth": "8-bit",
+      "format.input_color_space": "sRGB",
+      "images": [
+        "323",
+        0
+      ]
+    },
+    "class_type": "SaveImageAdvanced",
+    "_meta": {
+      "title": "Save Image (Advanced)"
     }
   },
   "211:203": {
