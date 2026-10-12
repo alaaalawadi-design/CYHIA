@@ -194,15 +194,6 @@
   .doc-media + .doc-media { margin-top: 12px; }
   .doc-media .cap { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
   .doc-media .res .stack { display: grid; gap: 10px; }
-  .doc-src { margin-top: 14px; }
-  .doc-src > summary { cursor: pointer; font-size: 13px; color: var(--muted); list-style: none; display: flex; align-items: center; gap: 6px; }
-  .doc-src > summary::-webkit-details-marker { display: none; }
-  .doc-src > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
-  .doc-src[open] > summary::before { transform: rotate(90deg); }
-  .doc-src pre {
-    margin: 8px 0 0; padding: 12px; border-radius: 8px; background: var(--panel-2); color: var(--muted);
-    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
-  }
   .doc-foot { color: var(--muted); font-size: 13px; margin: 24px 0 0; max-width: 78ch; }
   [hidden] { display: none !important; }
 </style>
@@ -365,10 +356,9 @@ const GUIDE = {
       ["Stable duration", "Strong stability for about 15 seconds. Longer clips still run, but identity drift and colour shifts may gradually appear. This is an observed range, not a hard cap."],
       ["Identity and styling", "Identity can bleed between characters, and hair, earrings or other jewellery can drift. Some clothing or styling triggers an identity mismatch."],
       ["Pairing", "Most evaluated cross-gender replacements were handled correctly, but consistency is not guaranteed."],
-      ["Segmentation", "Mask errors can leave stray artifacts, such as dots on a collar, or in rare cases miss the subject entirely — 2 of 66 evaluated samples. Regenerating usually clears it."],
-      ["Relighting", "One relighting failure in 66 evaluated samples."],
-      ["AI-generated characters", "These are handled particularly well, with strong identity consistency and minimal drift."]],
-    tip: "Before you run: put the reference image next to the video's first frame and compare face direction, pose, framing and body proportions. Matching those four is the single clearest quality lever. First time? Trim the driving video to a few seconds — a 49-frame test takes about 6 minutes and tells you whether the pair works before you commit to an hour-long run.",
+      ["Segmentation", "Mask errors can leave stray artifacts, such as dots on a collar, or in rare cases miss the subject entirely."],
+      ["Relighting", "It may face character lighting missmatch with the background."]],
+    tip: "Before you run: put the reference image next to the video's first frame and compare face direction, pose, framing and body proportions. Matching those four is the single clearest quality lever.",
   },
   animate: {
     imgDo: ["High resolution, with adequate body framing",
@@ -402,7 +392,6 @@ const GUIDE = {
              ["Time", "About 6 minutes for a 49-frame clip; a full 240-frame clip takes longer"]],
     disclaimers: [
       ["Orientation", "Portrait content performs best. Landscape is not a strength."],
-      ["Resolution examples", "1280 × 720, 1080 × 640 and 720 × 480 were used in evaluation. They are the sizes that were tried, not minimums or an exhaustive list."],
       ["Body fidelity", "The output can hallucinate anatomy, or reproduce the driving video's body instead of the reference character's."],
       ["Face detail", "Low image resolution shows up as noise around the mouth and teeth."],
       ["Pairing", "Male-to-male and female-to-female pairing is preferred: when the body is hallucinated, the driving video's character becomes the baseline. A quality recommendation, not a requirement."],
@@ -635,9 +624,6 @@ const M = {
 
 const DOCS = [
   { id: "doc-overview", kicker: "Overview", title: "What these two models do", nav: "Overview",
-    lead: "CyShield · AI & Data Science Division. An evaluation of character replacement and animation " +
-          "across input criteria, accuracy, challenges and demos. The sections below record the " +
-          "qualitative findings and the examples behind them.",
     points: [
       "Replacement puts the character from your reference image into an existing video, keeping that video's motion, scene and audio.",
       "Animation drives the character in your reference image with the motion of a driving video; the driving video's background is not carried over.",
@@ -650,13 +636,6 @@ const DOCS = [
           "what the evaluation observed.",
     guides: ["replace", "animate"] },
 
-  { id: "doc-reading", kicker: "Reading notes", title: "What this evaluation does and does not establish", nav: "Reading notes",
-    points: [
-      "Recommendations, not hard limits: the ~15-second replacement window is an observed stability range, and the three animation resolutions are the sizes that were tried. Neither should become an unconditional rejection rule without further validation.",
-      "Evidence is evaluation-specific: the segmentation discussion cites 2 of 66 samples, relighting 1 of 66. No general accuracy percentage, hardware benchmark or detailed test protocol is supplied.",
-      "Not defined by the evaluation: accepted file formats, maximum upload size, video codec, strict image dimensions, maximum animation duration, GPU/VRAM requirements and inference latency. The format, length and timing figures in the input guide come from this service's own pipeline instead.",
-    ] },
-
   { id: "doc-replace-strengths", kicker: "Replacement", title: "Strengths", nav: "Replacement strengths",
     lead: "Portrait-oriented and half-body content produces effective character transfer, with strong " +
           "stability for approximately 15 seconds. Longer sequences are possible, but identity drift and " +
@@ -666,7 +645,7 @@ const DOCS = [
       "Comparable results to Kling Replacement under similar conditions — AI-generated characters, matching initial position and pose. Both can produce motion hallucinations or artifacts, and both drift significantly after roughly 15 seconds, or sooner with frequent or large transitions.",
     ],
     callout: "The Kling comparison is a qualitative side-by-side from this evaluation, not an independently reproduced benchmark.",
-    source: "Portrait Character Replacement: Our solution handles character transfer effectively in portrait-oriented content and half body samples, with strong stability for up to ~15 seconds. Longer sequences are possible, but identity drift and color changes may gradually appear.\n\nAI-Generated Characters: Our solution handles AI-generated characters particularly well, with these characters showing strong identity consistency and generally minimal drift during replacement.\n\nNote: We reviewed Kling Replacement and found that its strength is also particularly noticeable with AI-generated characters and frames starting from a similar position and pose. We tested our model under similar conditions and observed comparable results. Both solutions can occasionally produce motion hallucinations or artifacts. For longer sequences, both Kling and our solution can experience significant drift after ~15 seconds, while sequences with frequent or large transitions may show these issues earlier." },
+  },
 
   { id: "doc-replace-pose", kicker: "Replacement · limitation", title: "Pose and expression", nav: "Pose & expression",
     lead: "Both the person in the video and the person in the reference image must face the camera. " +
@@ -675,14 +654,14 @@ const DOCS = [
       "Avoid starting on a strong expression such as laughing or crying: the expression is transferred instead of the person's neutral facial features being recovered.",
     ],
     media: [{ key: "pose", cap: "A landscape reference against a landscape driving video. The result is shown side by side with the original." }],
-    source: "Pose: Side poses do not work well in replacement, and the face may change — in both video and reference image the two persons have to face the camera. Also, faces starting with hard expressions like laughing or crying: the model won't get their real face features, they will be transferred like that." },
+  },
 
   { id: "doc-replace-transitions", kicker: "Replacement · limitation", title: "Transitions", nav: "Transitions",
     lead: "Transitions change the character severely. Use a single continuous shot.",
     points: [
       "The failure most often seen here combines two causes at once: a side-facing starting pose and a cut partway through, giving a wrong or drifted character.",
     ],
-    source: "Transitions will cause the character to change severely, so try to not add video transitions. Here for example the video contains 2 causes of failures: pose side starting, so character will be wrong or drifted, and transitions." },
+  },
 
   { id: "doc-replace-proportions", kicker: "Replacement · limitation", title: "Proportions, framing and padding", nav: "Proportions & padding",
     lead: "Proportion match between source and target has a major impact on output quality — mismatched " +
@@ -692,7 +671,7 @@ const DOCS = [
       "Padding the frame causes background hallucination, in the same way outpainting does.",
     ],
     media: [{ key: "proportions", cap: "Reference image and result. Compare the framing of the reference with the generated half of the output." }],
-    source: "3. Proportions and framing: Proportion match between source and target has a major impact on output quality. Mismatched proportions are the most common cause of visible degradation. When the subject is framed tightly, the model sometimes fails to outpaint the body. Keeping the same proportions between source and target mitigates this.\n\n4. Padding the frame can cause background hallucination, similar to outpainting artifacts." },
+  },
 
   { id: "doc-replace-segmentation", kicker: "Replacement · limitation", title: "Segmentation", nav: "Segmentation",
     lead: "Occasional mask errors appear as stray artifacts, such as dots on a collar or lapel. In rare " +
@@ -702,7 +681,7 @@ const DOCS = [
       "That count describes this evaluation; it is not a guaranteed production failure rate.",
     ],
     media: [{ key: "segmentation", cap: "Reference image, driving video and the side-by-side result." }],
-    source: "5. Segmentation: Occasional mask errors appear as stray artifacts, such as dots on the collar or lapel. In rare edge cases, the full subject is missed — this is an example of full subject. However this can be overcome by regenerating. Usually happens 2/66 samples." },
+  },
 
   { id: "doc-replace-identity", kicker: "Replacement · limitation", title: "Identity and attribute fidelity", nav: "Identity & attributes",
     lead: "Identity can bleed between characters. Most evaluated male-to-female and female-to-male " +
@@ -716,12 +695,12 @@ const DOCS = [
       { key: "identityA", cap: "Cross-gender replacement handled correctly: reference, driving video, side-by-side result." },
       { key: "identityB", cap: "A second case, reference image and result." },
     ],
-    source: "6. Identity and attribute fidelity. Character blending: Identity bleed can occur between characters in some samples. Cross-gender replacement: Most male-to-female and female-to-male cases are handled correctly. In some cases, subtle drift appears in hair or in accessories such as earrings and jewelry, though not consistently. Gender-atypical styling: When a male subject has stereotypically feminine styling (a dress, theatrical costume, or ponytail), the output may be rendered as female or blended, producing a significant identity mismatch." },
+  },
 
   { id: "doc-replace-relighting", kicker: "Replacement · limitation", title: "Relighting", nav: "Relighting",
     lead: "In 1 of 66 evaluated samples relighting failed and generated the same person throughout.",
     points: ["The evaluation does not give a more detailed definition of this failure."],
-    source: "7. Relighting: In 1 of 66 evaluated samples, relighting failed and generated the same person throughout." },
+  },
 
   { id: "doc-replace-good", kicker: "Replacement", title: "What a good input looks like", nav: "Good replacement inputs",
     lead: "The three things every clean replacement run in this evaluation had in common:",
@@ -731,12 +710,12 @@ const DOCS = [
       "Excellent image resolution. No numeric minimum was established.",
     ],
     callout: "The Replace tab's Gallery shows worked examples with the same three properties.",
-    source: "Our examples for input criteria: same pose facing camera; not far away from camera, face is clear; image resolution is excellent." },
+  },
 
   { id: "doc-animate-strengths", kicker: "Animation", title: "Strengths", nav: "Animation strengths",
     lead: "Portrait content performs best. Landscape is not a strength.",
     media: [{ key: "animStrength", cap: "A portrait reference and a portrait driving video — the configuration that performs best." }],
-    source: "Strengths: Portrait content performs best. Landscape is not a strength." },
+  },
 
   { id: "doc-animate-criteria", kicker: "Animation", title: "Input criteria, summed up", nav: "Animation criteria",
     points: [
@@ -748,7 +727,7 @@ const DOCS = [
       "Prefer male-to-male and female-to-female pairing: if the body is hallucinated, the driving video's character becomes the baseline.",
     ],
     callout: "The pairing preference is a quality recommendation that follows from a model limitation, not a mandatory eligibility rule.",
-    source: "Summing up input criteria: Use high-resolution sources with adequate framing. Match pose and body proportions between source and target or model will hallucinate falling to the video character. Avoid side poses in reference. Start animation with simple, neutral motion in the same position as the source. Avoid hair-adjacent gestures and props in animation. Preferred to do male to male and female to female, as if model hallucinated the body it will make the reference video character as its baseline." },
+  },
 
   { id: "doc-animate-resolution", kicker: "Animation", title: "Resolution examples", nav: "Resolutions",
     lead: "Three image-resolution options were used in evaluation: 1280 × 720, 1080 × 640 and 720 × 480.",
@@ -758,31 +737,31 @@ const DOCS = [
     ],
     media: [{ key: "resolution", cap: "One reference and one driving video run at the three sizes.",
               resultLabels: ["Result · 1280 × 720", "Result · 1080 × 640", "Result · 720 × 480"] }],
-    source: "image resolution options 1280x720 or 1080x640 or 720x480" },
+  },
 
   { id: "doc-animate-mouth", kicker: "Animation · limitation", title: "Mouth and teeth artifacts", nav: "Mouth & teeth",
     lead: "Noise in the teeth and mouth, caused by poor image resolution in the reference.",
     points: ["The fix is on the input side: a sharper reference image in which mouth and teeth detail survives."],
-    source: "example of noise in teeth and mouth due to bad image resolution" },
+  },
 
   { id: "doc-animate-posemismatch", kicker: "Animation · limitation", title: "Initial pose mismatch", nav: "Initial pose mismatch",
     lead: "A run whose starting poses did not match still gave a reasonably good result — but this is the " +
           "setup most likely to produce a large hallucination.",
     points: ["Matching the initial pose remains the recommended setup, even though a mismatch does not always fail."],
     media: [{ key: "poseMismatch", cap: "Reference and driving video start in different poses; the result still holds up." }],
-    source: "example of not starting with the same pose — the result was pretty good but sometimes may cause a huge hallucination" },
+  },
 
   { id: "doc-animate-hallucination", kicker: "Animation · limitation", title: "Body hallucination", nav: "Body hallucination",
     lead: "Generated body appearance falls back to the body in the driving video instead of the reference character's.",
     media: [{ key: "hallucination", cap: "Note how the generated body follows the driving video rather than the reference image." }],
-    source: "example for body hallucination — note how it falls to the video body" },
+  },
 
   { id: "doc-animate-bodytransfer", kicker: "Animation · limitation", title: "Reference-body transfer", nav: "Reference-body transfer",
     lead: "A second case of the same failure: the driving video's body is reproduced rather than the " +
           "intended character's body being preserved.",
     points: ["This is the reason same-gender pairing is preferred — it makes the fallback much less visible."],
     media: [{ key: "bodyTransfer", cap: "Reference image, driving video and result." }],
-    source: "example for doing the body as the reference video" },
+  },
 
   { id: "doc-animate-good", kicker: "Animation", title: "What a good input looks like", nav: "Good animation inputs",
     lead: "Portrait reference, portrait driving video, matching starting pose, simple motion and no props. " +
@@ -792,7 +771,7 @@ const DOCS = [
       { key: "goodB", cap: "A square reference, front-facing, with simple motion." },
       { key: "goodC", cap: "A third clean run at the same settings." },
     ],
-    source: "Animation: example of good input" },
+  },
 ];
 
 function docFigure(label, tag, src, cls) {
@@ -870,12 +849,6 @@ function buildDocs() {
     }
     if (sec.callout) { const p = document.createElement("p"); p.className = "doc-callout"; p.textContent = sec.callout; el.append(p); }
     for (const spec of sec.media || []) { const node = docMedia(spec); if (node) el.append(node); }
-    if (sec.source) {
-      const d = document.createElement("details"); d.className = "doc-src";
-      const sum = document.createElement("summary"); sum.textContent = "Original wording";
-      const pre = document.createElement("pre"); pre.textContent = sec.source;
-      d.append(sum, pre); el.append(d);
-    }
     body.append(el);
   }
 }
