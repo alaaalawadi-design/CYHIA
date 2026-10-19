@@ -248,6 +248,14 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
   uploads with XHR, then polls `/api/jobs/{id}` every 2 s. The page keeps its job id in
   `localStorage`, so a reload reconnects. Jobs are in memory: restarting the UI container forgets
   them (ComfyUI still finishes, the output stays in that backend's `data/*/output`).
+- **Accounts (added 2026-10-19):** `/login` (`static/login.html`) signs up / signs in; `/` and every
+  `/api/*` route except `/api/auth/*` need a session cookie (`app/auth.py`, stdlib only: SQLite
+  at `ui_outputs/users.db`, scrypt passwords, only token hashes stored). Each result is recorded
+  against its submitter when `_place_result()` names it, and History, `/api/history/...` and
+  `/api/jobs/...` return only the caller's own; anyone else's is a 404. Results from before
+  accounts have no owner and are hidden until `python -m app.auth assign-unowned <user>`.
+  The `/gallery` and `/docs-assets` static mounts stay public (curated content). Env:
+  `SIGNUP_CODE`, `ALLOW_SIGNUP`, `COOKIE_SECURE`.
 - The UI shows **stage name + elapsed minutes, not a percentage** — ~100 nodes of uneven cost mean
   any fraction would be a lie.
 - The UI must start even when a backend is down (`condition: service_started`, not
@@ -276,8 +284,8 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
   `assets/documentation/` via `DOCS_DIR`, mounted read-only and served at `/docs-assets`. Each
   case is one reference image, the driving video it was run against, and the result; a figure
   whose file is missing removes itself, so the tab still reads with the directory absent.
-- **The two tabs' input criteria and the Documentation tab share one source**, `GUIDE` in
-  `index.html`, rendered by `guideCols()`. `limits` there is what the pipeline enforces (formats,
+- **Input criteria appear only in the Documentation tab** (removed from the Replace and Animate
+  tabs 2026-10-19). Their source is `GUIDE` in `index.html`, rendered by `guideCols()`. `limits` there is what the pipeline enforces (formats,
   frame cap, timings); `disclaimers` is what the evaluation observed — a ~15 s stability window,
   the three animation resolutions, 2/66 segmentation and 1/66 relighting failures. Those are
   recommendations, not acceptance rules: do not turn them into upload validation.

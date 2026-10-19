@@ -167,6 +167,12 @@ services:
       OUT_DIR: "/app/outputs"
       GALLERY_DIR: "/app/assets/gallery"
       DOCS_DIR: "/app/assets/documentation"
+      # Accounts (app/auth.py; users.db lives in ./data/ui_outputs). Set
+      # SIGNUP_CODE to require an invite code, ALLOW_SIGNUP=0 to close sign-up,
+      # COOKIE_SECURE=1 once the UI is behind HTTPS.
+      SIGNUP_CODE: "${SIGNUP_CODE:-}"
+      ALLOW_SIGNUP: "${ALLOW_SIGNUP:-1}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-0}"
 
     volumes:
       # Mounted rather than baked: the UI can be edited and restarted in

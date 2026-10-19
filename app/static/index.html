@@ -48,6 +48,14 @@
   }
   header.brand svg { height: 48px; width: auto; display: block; flex: none; }
   header.brand::after { content: ""; order: 3; }
+  .who { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); min-width: 0; }
+  .who b { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who button {
+    font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; flex: none;
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--panel);
+  }
+  .who button:hover { color: var(--accent); border-color: var(--line-strong); }
+  @media (max-width: 560px) { header.brand svg { height: 36px; } .who .as { display: none; } }
   .sub { color: var(--muted); margin: 0; font-size: 14px; }
   .hero { margin: 0 0 28px; }
   .hero h1 { font-size: clamp(28px, 4vw, 42px); letter-spacing: -.02em; line-height: 1.08; font-weight: 600; margin: 0 0 10px; }
@@ -207,6 +215,7 @@
       <text x="104" y="84" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="800" font-size="84" letter-spacing="2" fill="var(--wordmark)">CYHIA</text>
       <text x="108" y="112" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="600" font-size="15" letter-spacing="4.5" fill="var(--muted)">HUMAN IMAGE ANIMATION</text>
     </svg>
+    <div class="who" id="who" hidden><span class="as">Signed in as</span><b id="who-name"></b><button type="button" id="logout">Sign out</button></div>
   </header>
 
   <section class="hero">
@@ -225,11 +234,6 @@
     <section class="panel" role="tabpanel">
       <div class="status"><span class="dot"></span><span class="status-text">Checking…</span></div>
       <p class="blurb"></p>
-      <details class="card guide" open>
-        <summary>Input guide: how to choose your image and video</summary>
-        <div class="guide-body"></div>
-        <p class="tip"></p>
-      </details>
       <div class="grid">
         <div class="card">
           <div class="label">Reference character (image)</div>
@@ -271,7 +275,7 @@
         <option value="">All services</option><option value="replace">Replace</option><option value="animate">Animate</option>
       </select>
     </div>
-    <p class="hist-sub">Every finished result stored by this UI, newest first. Kept on disk, so it survives a restart.</p>
+    <p class="hist-sub">Your finished results, newest first. Only you can see them. Kept on disk, so they survive a restart.</p>
     <div class="cases" id="hist-list"></div>
     <p class="empty" id="hist-empty" hidden>No finished runs yet.</p>
   </section>
@@ -313,6 +317,27 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
 };
+
+// ── account ─────────────────────────────────────────────────────────────────
+// Every /api call needs a session; an expired one sends the page back to sign-in.
+const toLogin = () => location.replace("/login");
+const _fetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const r = await _fetch(...args);
+  if (r.status === 401) toLogin();
+  return r;
+};
+fetch("/api/auth/me").then(r => r.ok && r.json()).then(u => {
+  if (!u) return;
+  document.getElementById("who-name").textContent = u.username;
+  document.getElementById("who").hidden = false;
+}).catch(() => {});
+document.getElementById("logout").addEventListener("click", async () => {
+  // Job ids are per user: do not let the next person on this browser resume them.
+  for (const s of Object.keys(SERVICES)) store.set(`job:${s}`, null);
+  try { await _fetch("/api/auth/logout", { method: "POST" }); } catch {}
+  toLogin();
+});
 
 const minutes = s => s < 60 ? `${Math.round(s)} s` : `${(s / 60).toFixed(1)} min`;
 
@@ -439,8 +464,6 @@ function makePanel(service) {
   el.dataset.panel = service;
   el.querySelector(".blurb").textContent = SERVICES[service];
   const $ = s => el.querySelector(s);
-  $(".guide-body").append(guideCols(service));
-  $(".tip").textContent = GUIDE[service].tip;
   const files = { image: null, video: null };
   const go = $(".go");
   let busy = false, pollTimer = null;
@@ -515,6 +538,7 @@ function makePanel(service) {
       if (e.lengthComputable) show({ stage: "Uploading", meta: `${Math.round(e.loaded / e.total * 100)}%`, fraction: e.loaded / e.total });
     };
     xhr.onload = () => {
+      if (xhr.status === 401) return toLogin();
       let body = {};
       try { body = JSON.parse(xhr.responseText); } catch {}
       if (xhr.status !== 200) {

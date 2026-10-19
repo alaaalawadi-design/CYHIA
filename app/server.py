@@ -30,10 +30,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import auth
+from .auth import User
 from .mp4 import faststart
 from .comfy_client import ComfyClient, ComfyError, ComfyTimeout
 from .workflows import ANIMATE, REPLACE, Adapter
@@ -94,6 +96,7 @@ class Job:
     service: str
     image: Path
     video: Path
+    user_id: int = 0  # who submitted it; only they can see it or its result
     state: str = "queued"  # queued | running | done | error
     stage: str = "Waiting for the GPU"
     step: int = 0
@@ -377,6 +380,7 @@ def _execute(job: Job) -> None:
             # (a successful trim already wrote faststart)
         # Only now does it get its final name and appear in ui_outputs/<service>/
         job.result = _place_result(job.service, downloaded, adapter.output_prefix)
+        auth.set_owner(job.service, job.result.name, job.user_id)
         _keep_inputs(job, trimmed)  # History shows what produced each result
         job.state, job.stage = "done", "Done"
     except ComfyTimeout as e:
@@ -440,8 +444,66 @@ def _save(upload: UploadFile, allowed: set[str], kind: str) -> Path:
 app = FastAPI(title="cy_hia", docs_url=None, redoc_url=None)
 
 
+def current_user(request: Request) -> User:
+    user = auth.user_for(request.cookies.get(auth.COOKIE))
+    if user is None:
+        raise HTTPException(401, "Please sign in.")
+    return user
+
+
+def _signed_in(user: User) -> JSONResponse:
+    resp = JSONResponse({"username": user.username})
+    resp.set_cookie(
+        auth.COOKIE,
+        auth.new_session(user),
+        max_age=auth.SESSION_DAYS * 86400,
+        httponly=True,
+        samesite="lax",
+        # Set COOKIE_SECURE=1 once the UI is served over HTTPS.
+        secure=os.environ.get("COOKIE_SECURE") == "1",
+    )
+    return resp
+
+
+@app.post("/api/auth/signup")
+def signup(
+    username: str = Body(...), password: str = Body(...), code: str = Body("")
+):
+    try:
+        return _signed_in(auth.signup(username, password, code))
+    except auth.AuthError as e:
+        raise HTTPException(e.status, str(e)) from None
+
+
+@app.post("/api/auth/login")
+def login(username: str = Body(...), password: str = Body(...)):
+    try:
+        return _signed_in(auth.login(username, password))
+    except auth.AuthError as e:
+        raise HTTPException(e.status, str(e)) from None
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request):
+    auth.end_session(request.cookies.get(auth.COOKIE))
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(auth.COOKIE)
+    return resp
+
+
+@app.get("/api/auth/me")
+def me(user: User = Depends(current_user)) -> dict:
+    return {"username": user.username}
+
+
+@app.get("/api/auth/config")
+def auth_config() -> dict:
+    """What the sign-in page should offer."""
+    return {"signup": auth.ALLOW_SIGNUP, "code": bool(auth.SIGNUP_CODE)}
+
+
 @app.get("/api/status")
-def status() -> dict:
+def status(_: User = Depends(current_user)) -> dict:
     out = {}
     for name, client in BACKENDS.items():
         if not client.is_up():
@@ -466,7 +528,10 @@ def status() -> dict:
 
 @app.post("/api/{service}/jobs")
 def create_job(
-    service: str, image: UploadFile = File(...), video: UploadFile = File(...)
+    service: str,
+    image: UploadFile = File(...),
+    video: UploadFile = File(...),
+    user: User = Depends(current_user),
 ) -> dict:
     if service not in BACKENDS:
         raise HTTPException(404, f"Unknown service '{service}'.")
@@ -490,7 +555,12 @@ def create_job(
         raise
 
     job = Job(
-        id=uuid.uuid4().hex, service=service, image=img, video=vid, created=time.time()
+        id=uuid.uuid4().hex,
+        service=service,
+        image=img,
+        video=vid,
+        user_id=user.id,
+        created=time.time(),
     )
     with LOCK:
         JOBS[job.id] = job
@@ -498,21 +568,22 @@ def create_job(
     return job.public()
 
 
-def _job(job_id: str) -> Job:
+def _job(job_id: str, user: User) -> Job:
     job = JOBS.get(job_id)
-    if job is None:
+    # Someone else's job is reported exactly like a missing one.
+    if job is None or job.user_id != user.id:
         raise HTTPException(404, "Unknown job — the UI server may have restarted.")
     return job
 
 
 @app.get("/api/jobs/{job_id}")
-def get_job(job_id: str) -> dict:
-    return _job(job_id).public()
+def get_job(job_id: str, user: User = Depends(current_user)) -> dict:
+    return _job(job_id, user).public()
 
 
 @app.get("/api/jobs/{job_id}/video")
-def get_video(job_id: str):
-    job = _job(job_id)
+def get_video(job_id: str, user: User = Depends(current_user)):
+    job = _job(job_id, user)
     if not job.result or not job.result.is_file():
         raise HTTPException(404, "No result for this job.")
     return FileResponse(
@@ -556,18 +627,24 @@ def _gallery() -> dict[str, list[dict]]:
 
 
 @app.get("/api/gallery")
-def gallery() -> dict:
+def gallery(_: User = Depends(current_user)) -> dict:
     return _gallery()
 
 
 @app.get("/api/history")
-def history() -> list[dict]:
-    """Every finished result on disk, newest first. Read from OUT_DIR rather than
-    JOBS, so it survives a restart of the UI container."""
+def history(user: User = Depends(current_user)) -> list[dict]:
+    """The caller's finished results on disk, newest first. Read from OUT_DIR
+    rather than JOBS, so it survives a restart of the UI container; ownership
+    comes from the auth database."""
+    mine = auth.owned(user.id)
     rows = []
     for service in BACKENDS:
         for f in (OUT_DIR / service).glob("*"):
-            if f.is_file() and f.suffix.lower() in VIDEO_EXT:
+            if (
+                f.is_file()
+                and f.suffix.lower() in VIDEO_EXT
+                and (service, f.name) in mine
+            ):
                 st = f.stat()
                 row = {
                     "service": service,
@@ -588,12 +665,17 @@ def history() -> list[dict]:
 
 
 @app.get("/api/history/{service}/{name}")
-def history_video(service: str, name: str):
+def history_video(service: str, name: str, user: User = Depends(current_user)):
     if service not in BACKENDS:
         raise HTTPException(404, f"Unknown service '{service}'.")
     root = (OUT_DIR / service).resolve()
     f = (root / name).resolve()
-    if f.parent != root or not f.is_file() or f.suffix.lower() not in VIDEO_EXT:
+    if (
+        f.parent != root
+        or not f.is_file()
+        or f.suffix.lower() not in VIDEO_EXT
+        or not auth.owns(user.id, service, f.name)
+    ):
         raise HTTPException(404, "No such result.")
     return FileResponse(
         f, media_type="video/mp4", filename=f.name, content_disposition_type="inline"
@@ -601,8 +683,14 @@ def history_video(service: str, name: str):
 
 
 @app.get("/api/history/{service}/{name}/input/{kind}")
-def history_input(service: str, name: str, kind: str):
-    if service not in BACKENDS or kind not in ("image", "video"):
+def history_input(
+    service: str, name: str, kind: str, user: User = Depends(current_user)
+):
+    if (
+        service not in BACKENDS
+        or kind not in ("image", "video")
+        or not auth.owns(user.id, service, name)
+    ):
         raise HTTPException(404, "No such input.")
     f = _history_input(
         service, Path(name).stem, kind, IMAGE_EXT if kind == "image" else VIDEO_EXT
@@ -613,8 +701,17 @@ def history_input(service: str, name: str, kind: str):
 
 
 @app.get("/")
-def index():
+def index(request: Request):
+    if auth.user_for(request.cookies.get(auth.COOKIE)) is None:
+        return RedirectResponse("/login", status_code=303)
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/login")
+def login_page(request: Request):
+    if auth.user_for(request.cookies.get(auth.COOKIE)) is not None:
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(STATIC_DIR / "login.html")
 
 
 if GALLERY_DIR.is_dir():
@@ -628,6 +725,7 @@ def main():
     import uvicorn
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    auth.init()
     # Half-finished downloads from a container that was killed mid-job. The
     # per-job cleanup in _execute cannot run in that case, and nothing else
     # ever looks in here, so the files would sit on disk forever.

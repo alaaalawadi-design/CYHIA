@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CYHIA — Sign in</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2718%27 fill=%27%23ffffff%27/%3E%3Cpath d=%27M50 20L24 50l26 30h12L36 50l26-30z%27 fill=%27%233a59d9%27/%3E%3C/svg%3E">
+<style>
+  /* Same tokens as index.html. No web font, nothing from a CDN. */
+  :root {
+    --bg: #f7f7fb; --panel: #ffffff; --panel-2: #f0f1f9; --text: #1b1a1a; --muted: #55566a;
+    --line: rgba(28,25,152,.10); --line-strong: rgba(28,25,152,.22);
+    --accent: #1c1998; --accent-hover: #2621b8; --accent-text: #fff;
+    --wordmark: #1c1998;
+    --shadow: 0 8px 24px rgba(28,25,152,.08), 0 2px 6px rgba(28,25,152,.04);
+    --bad: #bc0424; --err-bg: #fbe9ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0a26; --panel: #12103e; --panel-2: #0e0d33; --text: #ececfa; --muted: #9c9dc8;
+      --line: rgba(127,162,244,.14); --line-strong: rgba(127,162,244,.3);
+      --accent: #3a59d9; --accent-hover: #5b8aff; --accent-text: #fff;
+      --wordmark: #ffffff;
+      --shadow: 0 8px 24px rgba(0,0,0,.35);
+      --bad: #ff6b7d; --err-bg: #3a0f1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--text); min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+    font: 15px/1.55 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(58,89,217,.10), transparent 60%),
+      radial-gradient(900px 600px at -10% 30%, rgba(188,4,36,.06), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  .box { width: 100%; max-width: 380px; }
+  .logo { display: block; height: 56px; width: auto; margin: 0 auto 24px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; box-shadow: var(--shadow); }
+  .switch { display: flex; gap: 4px; padding: 4px; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); }
+  .switch button {
+    flex: 1; font: inherit; font-weight: 500; font-size: 14px; background: none; border: 0; color: var(--muted);
+    cursor: pointer; padding: 7px 0; border-radius: 999px;
+  }
+  .switch button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+  input {
+    width: 100%; font: inherit; color: var(--text); background: var(--panel-2); margin-bottom: 14px;
+    border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 12px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { color: var(--muted); font-size: 12px; margin: -10px 0 14px; }
+  .go {
+    width: 100%; font: inherit; font-weight: 600; padding: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
+    background: var(--accent); color: var(--accent-text); cursor: pointer; margin-top: 4px;
+  }
+  .go:hover:not(:disabled) { background: var(--accent-hover); }
+  .go:disabled { opacity: .5; cursor: wait; }
+  .error { background: var(--err-bg); color: var(--bad); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="box">
+  <svg class="logo" viewBox="0 0 560 120" role="img" aria-label="CYHIA — Human Image Animation">
+    <path d="M40 16 L14 60 L40 104 L58 104 L32 60 L58 16Z" fill="#bc0424"/>
+    <path d="M62 8 L30 60 L62 112 L86 112 L54 60 L86 8Z" fill="#3a59d9"/>
+    <text x="104" y="84" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="800" font-size="84" letter-spacing="2" fill="var(--wordmark)">CYHIA</text>
+    <text x="108" y="112" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="600" font-size="15" letter-spacing="4.5" fill="var(--muted)">HUMAN IMAGE ANIMATION</text>
+  </svg>
+  <form class="card" id="form" novalidate>
+    <div class="switch" id="switch">
+      <button type="button" data-mode="login" aria-pressed="true">Sign in</button>
+      <button type="button" data-mode="signup" aria-pressed="false">Sign up</button>
+    </div>
+    <div class="error" id="err" hidden></div>
+    <label for="username">Username</label>
+    <input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+    <p class="hint" data-only="signup" hidden>3–32 characters: letters, digits, “.”, “_” or “-”.</p>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <p class="hint" data-only="signup" hidden>At least 8 characters.</p>
+    <div data-only="signup" hidden>
+      <label for="password2">Confirm password</label>
+      <input id="password2" type="password" autocomplete="new-password">
+    </div>
+    <div id="code-row" hidden>
+      <label for="code">Sign-up code</label>
+      <input id="code" autocomplete="off">
+    </div>
+    <button class="go" id="go" type="submit">Sign in</button>
+  </form>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let mode = "login", cfg = { signup: true, code: false };
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll("#switch button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  document.querySelectorAll("[data-only=signup]").forEach(e => e.hidden = m !== "signup");
+  $("code-row").hidden = !(m === "signup" && cfg.code);
+  $("password").autocomplete = m === "signup" ? "new-password" : "current-password";
+  $("go").textContent = m === "signup" ? "Create account" : "Sign in";
+  $("err").hidden = true;
+}
+document.querySelectorAll("#switch button").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+
+fetch("/api/auth/config").then(r => r.json()).then(c => {
+  cfg = c;
+  if (!c.signup) $("switch").hidden = true;
+  setMode(mode);
+}).catch(() => {});
+
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const err = msg => { $("err").textContent = msg; $("err").hidden = false; };
+  const body = { username: $("username").value, password: $("password").value };
+  if (!body.username || !body.password) return err("Enter a username and a password.");
+  if (mode === "signup") {
+    if (body.password !== $("password2").value) return err("The passwords do not match.");
+    body.code = $("code").value;
+  }
+  $("go").disabled = true;
+  try {
+    const r = await fetch(`/api/auth/${mode}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const d = j.detail;
+      return err(typeof d === "string" ? d : `Request failed (HTTP ${r.status}).`);
+    }
+    location.replace("/");
+  } catch {
+    err("The server could not be reached.");
+  } finally {
+    $("go").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
