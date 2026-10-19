@@ -62,10 +62,10 @@
   .hero h1 span { background: var(--gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .hero p { color: var(--muted); margin: 0; max-width: 62ch; }
 
-  .tabs { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 22px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+  .tabs { display: inline-flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; gap: 4px; padding: 4px; margin-bottom: 22px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
   .tabs button {
     font: inherit; font-weight: 500; font-size: 14px; background: none; border: 0; color: var(--muted); cursor: pointer;
-    padding: 8px 18px; border-radius: 999px; display: flex; align-items: center; gap: 8px;
+    padding: 8px 18px; border-radius: 999px; display: flex; align-items: center; gap: 8px; flex: none; white-space: nowrap;
     transition: background .15s, color .15s;
   }
   .tabs button:hover { color: var(--text); }
@@ -78,32 +78,115 @@
   .status b { font-weight: 600; }
   .blurb { color: var(--muted); margin: 0 0 18px; max-width: 70ch; }
 
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; min-width: 0; box-shadow: var(--shadow); }
 
-  .drop {
-    display: block; position: relative; border: 1.5px dashed var(--line-strong); border-radius: 8px;
-    min-height: 200px; margin-bottom: 14px; cursor: pointer; overflow: hidden;
-    background: var(--panel-2);
+  /* ── editor: inputs in a sidebar, one player + timeline for source and result ── */
+  .editor { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  @media (max-width: 880px) {
+    .editor { grid-template-columns: 1fr; }
+    .side { display: grid; grid-template-columns: 1fr 1fr; }
+    .side .go { grid-column: 1 / -1; }
   }
-  .drop:hover { border-color: var(--accent); }
-  .drop.over { border-color: var(--accent); }
-  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 1; }
-  .drop .hint {
-    position: absolute; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 12px;
+  .asset {
+    position: relative; min-width: 0; padding: 12px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow);
   }
-  .drop .hint strong { color: var(--text); font-weight: 600; }
-  .drop img, .drop video { display: block; width: 100%; max-height: 280px; object-fit: contain; background: #000; }
-  .drop.has .hint { display: none; }
-  .drop .clear {
-    position: absolute; top: 6px; right: 6px; z-index: 2; display: none;
-    font: inherit; font-size: 12px; border: 0; border-radius: 6px; padding: 3px 8px;
-    background: rgba(0,0,0,.6); color: #fff; cursor: pointer;
+  .asset.over { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .asset-head { display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+  .more {
+    font: inherit; font-size: 16px; line-height: 1; letter-spacing: 1px; padding: 4px 7px;
+    border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer;
   }
-  .drop.has .clear { display: block; }
-  .label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .more:hover, .more[aria-expanded="true"] { background: var(--panel-2); color: var(--text); }
+  .menu {
+    position: absolute; right: 10px; top: 40px; z-index: 5; min-width: 150px; padding: 4px;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow);
+  }
+  .menu button {
+    display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; padding: 7px 10px;
+    border: 0; border-radius: 6px; background: none; color: var(--text); cursor: pointer;
+  }
+  .menu button:hover:not(:disabled) { background: var(--panel-2); }
+  .menu button:disabled { opacity: .45; cursor: default; }
+  .thumb {
+    position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; overflow: hidden;
+    font: inherit; color: var(--muted); cursor: pointer;
+    background: var(--panel-2); border: 1.5px dashed var(--line-strong); border-radius: 8px;
+  }
+  .thumb:hover { border-color: var(--accent); }
+  .asset.has .thumb { border: 0; background: #000; }
+  .thumb img, .thumb video { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .thumb .hint {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; padding: 10px; text-align: center; font-size: 13px;
+  }
+  .thumb .hint strong { color: var(--text); font-weight: 600; }
+  .asset.has .thumb .hint { display: none; }
+  .fmeta { margin: 10px 0 0; font-size: 13px; min-width: 0; }
+  .fmeta .fn { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fmeta .fd { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .swap {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 10px; padding: 9px;
+    font: inherit; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px;
+  }
+  .swap:hover { border-color: var(--accent); color: var(--accent); }
+  .swap svg, .ctl svg { width: 18px; height: 18px; flex: none; }
+
+  .work { min-width: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+  .jobbar { padding: 12px 14px 0; }
+  .jobbar .error, .jobbar .progress { margin: 0 0 12px; }
+  .screen {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 100%; aspect-ratio: 16 / 9; max-height: 68vh; background: #000;
+  }
+  .screen video { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .screen.fill video { object-fit: cover; }
+  .screen:fullscreen { max-height: none; aspect-ratio: auto; }
+  .screen .placeholder {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 24px; text-align: center; font-size: 14px; color: #9c9dc8;
+  }
+  .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .controls .sp { flex: 1; }
+  .ctl {
+    display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+    border: 0; border-radius: 8px; background: none; color: var(--text); cursor: pointer;
+  }
+  .ctl:hover:not(:disabled) { background: var(--panel-2); }
+  .ctl:disabled { opacity: .4; cursor: default; }
+  .time { margin-left: 6px; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .time .of { color: var(--muted); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line-strong); border-radius: 8px; }
+  .seg button {
+    font: inherit; font-size: 13px; padding: 5px 12px; border: 0; border-radius: 6px;
+    background: none; color: var(--muted); cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .seg button:disabled { opacity: .4; cursor: default; }
+  .fit, .dlbtn {
+    font: inherit; font-size: 13px; padding: 6px 10px; color: var(--text); text-decoration: none;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px;
+  }
+  .dlbtn { color: var(--accent); font-weight: 600; }
+  @media (max-width: 560px) { .seg button { padding: 5px 9px; } .fit, .dlbtn { padding: 6px 7px; } .controls { gap: 4px; } }
+  .timeline { position: relative; padding: 0 12px 12px; background: var(--panel-2); cursor: pointer; user-select: none; touch-action: none; }
+  .ruler { position: relative; height: 30px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--line); }
+  .ruler i { position: absolute; bottom: 0; width: 1px; height: 4px; background: var(--line-strong); }
+  .ruler i.major { height: 8px; }
+  .ruler span { position: absolute; top: 4px; transform: translateX(-50%); }
+  .ruler span.first { transform: none; }
+  .ruler span.last { transform: translateX(-100%); }
+  .track { position: relative; height: 54px; margin-top: 10px; overflow: hidden; border: 1.5px solid var(--accent); border-radius: 6px; background: #000; }
+  .track.wave { height: 30px; margin-top: 6px; border-color: var(--line-strong); background: var(--panel); }
+  .track canvas { display: block; width: 100%; height: 100%; }
+  .track .none { position: absolute; inset: 0; display: flex; align-items: center; padding-left: 10px; font-size: 12px; color: var(--muted); }
+  .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; }
+  .playhead::before {
+    content: ""; position: absolute; top: 14px; left: 50%; width: 12px; height: 14px; transform: translateX(-50%);
+    background: var(--accent); border-radius: 2px; clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%);
+  }
 
   .go {
     width: 100%; font: inherit; font-weight: 600; padding: 13px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
@@ -114,7 +197,6 @@
   .go:not(:disabled):hover { transform: translateY(-1px); background: var(--accent-hover); }
   .go:disabled { opacity: .5; cursor: not-allowed; }
 
-  .result video { width: 100%; max-height: 580px; background: #000; border-radius: 10px; display: block; }
   .empty { color: var(--muted); min-height: 200px; display: flex; align-items: center; justify-content: center; text-align: center; }
   .progress { margin: 0 0 12px; font-size: 14px; }
   .progress .stage { font-weight: 600; }
@@ -126,7 +208,6 @@
   @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
   @media (prefers-reduced-motion: reduce) { .bar.spin > i { animation: none; width: 100%; opacity: .4; } }
   .error { background: var(--err-bg); color: var(--bad); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; overflow-wrap: anywhere; }
-  .dl { display: inline-block; margin-top: 10px; color: var(--accent); }
   .guide { margin: 0 0 20px; }
   .guide > summary {
     cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px;
@@ -234,33 +315,72 @@
     <section class="panel" role="tabpanel">
       <div class="status"><span class="dot"></span><span class="status-text">Checking…</span></div>
       <p class="blurb"></p>
-      <div class="grid">
-        <div class="card">
-          <div class="label">Reference character (image)</div>
-          <div class="drop" data-kind="image">
-            <input type="file" accept="image/*">
-            <div class="hint"><strong>Drop an image or click to choose</strong>PNG, JPG or WebP</div>
-            <button type="button" class="clear">Remove</button>
+      <div class="editor">
+        <aside class="side">
+          <div class="asset" data-kind="image">
+            <div class="asset-head"><span>Character</span><button type="button" class="more" aria-label="Character options" aria-haspopup="menu" aria-expanded="false">⋯</button></div>
+            <div class="menu" role="menu" hidden>
+              <button type="button" role="menuitem" data-act="pick">Choose file…</button>
+              <button type="button" role="menuitem" data-act="clear">Remove</button>
+            </div>
+            <input type="file" accept="image/*" hidden>
+            <button type="button" class="thumb" aria-label="Choose image"><span class="hint"><strong>Drop an image or click</strong>PNG, JPG or WebP</span></button>
+            <button type="button" class="swap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg><span>Choose image</span></button>
           </div>
-          <div class="label">Driving video (provides the motion)</div>
-          <div class="drop" data-kind="video">
-            <input type="file" accept="video/*">
-            <div class="hint"><strong>Drop a video or click to choose</strong>MP4, MOV or WebM</div>
-            <button type="button" class="clear">Remove</button>
+          <div class="asset" data-kind="video">
+            <div class="asset-head"><span>Source video</span><button type="button" class="more" aria-label="Source video options" aria-haspopup="menu" aria-expanded="false">⋯</button></div>
+            <div class="menu" role="menu" hidden>
+              <button type="button" role="menuitem" data-act="pick">Choose file…</button>
+              <button type="button" role="menuitem" data-act="clear">Remove</button>
+            </div>
+            <input type="file" accept="video/*" hidden>
+            <button type="button" class="thumb" aria-label="Choose video"><span class="hint"><strong>Drop a video or click</strong>MP4, MOV or WebM</span></button>
+            <div class="fmeta" hidden><div class="fn"></div><div class="fd"></div></div>
+            <button type="button" class="swap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="14" height="14" rx="3"/><path d="M16.5 10l5-3v10l-5-3z"/></svg><span>Choose video</span></button>
           </div>
           <button class="go" disabled>Generate</button>
-        </div>
-        <div class="card result">
-          <div class="label">Result</div>
-          <div class="error" hidden></div>
-          <div class="progress" hidden>
-            <div><span class="stage"></span> <span class="meta"></span></div>
-            <div class="bar"><i></i></div>
+        </aside>
+        <div class="work">
+          <div class="jobbar" hidden>
+            <div class="error" hidden></div>
+            <div class="progress" hidden>
+              <div><span class="stage"></span> <span class="meta"></span></div>
+              <div class="bar"><i></i></div>
+            </div>
           </div>
-          <div class="empty">The result will appear here.</div>
-          <div class="out" hidden>
-            <video controls playsinline></video>
-            <a class="dl" download>Download video</a>
+          <div class="screen">
+            <video playsinline preload="metadata" hidden></video>
+            <div class="placeholder">Add a source video to preview it here. The result appears here when it is ready.</div>
+          </div>
+          <div class="controls">
+            <button type="button" class="ctl play" aria-label="Play" disabled>
+              <svg class="i-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>
+              <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+            </button>
+            <button type="button" class="ctl step" aria-label="Next frame" disabled>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 5v14l10-7zM16 5h3v14h-3z"/></svg>
+            </button>
+            <button type="button" class="ctl mute" aria-label="Mute" disabled>
+              <svg class="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+              <svg class="i-mute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></svg>
+            </button>
+            <span class="time"><span class="cur">00:00</span> <span class="of">/ <span class="dur">00:00</span></span></span>
+            <span class="sp"></span>
+            <div class="seg" role="group" aria-label="Show">
+              <button type="button" data-view="source" aria-pressed="true" disabled>Source</button>
+              <button type="button" data-view="result" aria-pressed="false" disabled>Result</button>
+            </div>
+            <a class="dlbtn" download hidden>Download</a>
+            <select class="fit" aria-label="Scaling"><option value="fit">Fit</option><option value="fill">Fill</option></select>
+            <button type="button" class="ctl full" aria-label="Full screen" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+            </button>
+          </div>
+          <div class="timeline" hidden>
+            <div class="ruler"></div>
+            <div class="track film"><canvas></canvas></div>
+            <div class="track wave"><canvas></canvas><span class="none" hidden></span></div>
+            <div class="playhead"></div>
           </div>
         </div>
       </div>
@@ -459,6 +579,106 @@ function guideCols(service) {
   return cols;
 }
 
+// ── editor media helpers ────────────────────────────────────────────────────
+const clock = t => {
+  t = Math.max(0, Math.floor(t || 0));
+  const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60;
+  return (h ? `${h}:` : "") + `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+};
+const FPS = 24;                    // both workflows render at 24 fps; one frame-step = 1/24 s
+const WAVE_MAX_BYTES = 250e6;      // decoding audio means reading the whole file into memory
+
+// Resolves on `ev`, rejects on error or after `ms`, so a stuck seek cannot hang the filmstrip.
+function once(el, ev, ms = 8000) {
+  return new Promise((ok, bad) => {
+    const done = f => () => { clearTimeout(t); el.removeEventListener(ev, a); el.removeEventListener("error", b); f(); };
+    const a = done(ok), b = done(() => bad(new Error("media error")));
+    const t = setTimeout(done(() => bad(new Error("timeout"))), ms);
+    el.addEventListener(ev, a); el.addEventListener("error", b);
+  });
+}
+
+function sizeCanvas(c) {
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  const ctx = c.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+
+// Thumbnails across the clip, from a private <video> so the player is never seeked.
+// `alive()` turns false when a newer draw starts; the old one stops at its next frame.
+async function drawFilmstrip(canvas, src, duration, alive) {
+  const { ctx, w, h } = sizeCanvas(canvas);
+  if (!w || !duration) return;
+  const v = document.createElement("video");
+  v.muted = true; v.preload = "auto"; v.playsInline = true; v.src = src;
+  try {
+    await once(v, "loadeddata");
+    const tw = Math.max(16, h * (v.videoWidth || 16) / (v.videoHeight || 9));
+    const n = Math.ceil(w / tw);
+    for (let i = 0; i < n && alive(); i++) {
+      v.currentTime = Math.min(duration - 0.05, (i + 0.5) * tw / w * duration);
+      await once(v, "seeked");
+      if (alive()) ctx.drawImage(v, i * tw, 0, tw, h);
+    }
+  } catch {} finally { v.removeAttribute("src"); v.load(); }
+}
+
+// Peak amplitude per bucket, decoded once per URL. null with a reason when there is none.
+const peaksCache = new Map();
+function loadPeaks(src, size) {
+  if (!peaksCache.has(src)) peaksCache.set(src, (async () => {
+    if (size > WAVE_MAX_BYTES) return { why: "Waveform skipped: file too large" };
+    const r = await fetch(src);
+    if (+r.headers.get("content-length") > WAVE_MAX_BYTES) return { why: "Waveform skipped: file too large" };
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    // Decoding into an 8 kHz context keeps memory small; a waveform needs no more.
+    const audio = await new Ctx(1, 1, 8000).decodeAudioData(await r.arrayBuffer());
+    const data = audio.getChannelData(0), B = 1200, per = Math.max(1, Math.floor(data.length / B));
+    const peaks = new Float32Array(B);
+    let top = 0;
+    for (let i = 0; i < B; i++) {
+      let m = 0;
+      for (let j = i * per, e = Math.min(data.length, j + per); j < e; j++) { const a = Math.abs(data[j]); if (a > m) m = a; }
+      peaks[i] = m; if (m > top) top = m;
+    }
+    return top > 0.001 ? { peaks: peaks.map(p => p / top) } : { why: "Silent audio track" };
+  })().catch(() => ({ why: "No audio track" })));
+  return peaksCache.get(src);
+}
+
+function drawWave(canvas, peaks) {
+  const { ctx, w, h } = sizeCanvas(canvas);
+  ctx.fillStyle = getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#3a59d9";
+  const bar = 2, gap = 1, n = Math.floor(w / (bar + gap));
+  for (let i = 0; i < n; i++) {
+    const p = peaks[Math.floor(i / n * peaks.length)];
+    const bh = Math.max(1, p * (h - 6));
+    ctx.fillRect(i * (bar + gap), (h - bh) / 2, bar, bh);
+  }
+}
+
+// Labelled ticks at a step that gives roughly 3–8 labels across the clip.
+function drawRuler(el, duration) {
+  el.replaceChildren();
+  if (!duration) return;
+  const step = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600].find(s => duration / s <= 8) || 1200;
+  const minor = step / 4;
+  for (let t = 0, i = 0; t <= duration + 1e-6; t = ++i * minor) {
+    const x = `${t / duration * 100}%`, tick = document.createElement("i");
+    tick.style.left = x;
+    if (i % 4 === 0) {
+      tick.className = "major";
+      const lab = document.createElement("span");
+      lab.style.left = x; lab.textContent = step < 1 ? `${t.toFixed(1)}s` : `${Math.round(t)}s`;
+      if (t === 0) lab.className = "first";
+      else if (t / duration > 0.97) lab.className = "last";
+      el.append(lab);
+    }
+    el.append(tick);
+  }
+}
+
 function makePanel(service) {
   const el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
   el.dataset.panel = service;
@@ -468,34 +688,151 @@ function makePanel(service) {
   const go = $(".go");
   let busy = false, pollTimer = null;
 
-  // ── inputs ────────────────────────────────────────────────────────────────
-  el.querySelectorAll(".drop").forEach(drop => {
-    const kind = drop.dataset.kind, input = drop.querySelector("input");
+  // ── player: one <video> shows either the source upload or the result ───────
+  const v = $(".screen video"), timeline = $(".timeline");
+  const media = { source: null, result: null };   // { src, size } per view
+  let mode = "source", gen = 0, filename = null;
+
+  function setView(next) {
+    mode = next;
+    el.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === mode));
+    const m = media[mode];
+    $(".dlbtn").hidden = !(mode === "result" && m);
+    if (m) { $(".dlbtn").href = m.src; $(".dlbtn").download = filename || "result.mp4"; }
+    v.pause();
+    if (!m) { v.removeAttribute("src"); v.load(); }
+    else if (v.getAttribute("src") !== m.src) v.src = m.src;
+    v.hidden = !m; $(".placeholder").hidden = !!m; timeline.hidden = !m;
+    ["play", "step", "mute", "full"].forEach(c => $(`.ctl.${c}`).disabled = !m);
+    if (!m) { gen++; $(".cur").textContent = $(".dur").textContent = "00:00"; }
+  }
+  function setMedia(which, m) {
+    media[which] = m;
+    $(`[data-view="${which}"]`).disabled = !m;
+    if (m || mode === which) setView(m ? which : (media.source ? "source" : media.result ? "result" : which));
+  }
+  el.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+
+  // Timeline drawing: ruler on metadata, filmstrip + waveform after, redrawn on resize.
+  let drawnWidth = 0;
+  function drawTimeline() {
+    const m = media[mode], d = v.duration;
+    if (!m || !isFinite(d)) return;
+    const my = ++gen, alive = () => my === gen;
+    drawnWidth = timeline.clientWidth;
+    drawRuler($(".ruler"), d);
+    drawFilmstrip($(".film canvas"), m.src, d, alive);
+    const none = $(".wave .none"), wc = $(".wave canvas");
+    none.hidden = false; none.textContent = "Reading audio…"; sizeCanvas(wc);
+    loadPeaks(m.src, m.size).then(r => {
+      if (!alive()) return;
+      none.hidden = !!r.peaks; none.textContent = r.why || "";
+      if (r.peaks) drawWave(wc, r.peaks);
+    });
+  }
+  let resizeT = null;
+  new ResizeObserver(() => {
+    if (timeline.hidden || timeline.clientWidth === drawnWidth) return;
+    clearTimeout(resizeT); resizeT = setTimeout(drawTimeline, 250);
+  }).observe(timeline);
+
+  const tick = () => {
+    const d = v.duration || 0;
+    $(".cur").textContent = clock(v.currentTime);
+    $(".playhead").style.left = `calc(12px + (100% - 24px) * ${d ? Math.min(1, v.currentTime / d) : 0})`;
+    if (!v.paused) requestAnimationFrame(tick);
+  };
+  v.addEventListener("loadedmetadata", () => { $(".dur").textContent = clock(v.duration); tick(); drawTimeline(); });
+  v.addEventListener("timeupdate", () => { if (v.paused) tick(); });
+  v.addEventListener("seeked", tick);
+  const syncPlay = () => {
+    $(".i-play").hidden = !v.paused; $(".i-pause").hidden = v.paused;
+    $(".ctl.play").setAttribute("aria-label", v.paused ? "Play" : "Pause");
+    if (!v.paused) tick();
+  };
+  v.addEventListener("play", syncPlay); v.addEventListener("pause", syncPlay); v.addEventListener("ended", syncPlay);
+  const syncVol = () => {
+    $(".i-vol").hidden = v.muted; $(".i-mute").hidden = !v.muted;
+    $(".ctl.mute").setAttribute("aria-label", v.muted ? "Unmute" : "Mute");
+  };
+  v.addEventListener("volumechange", syncVol);
+
+  const toggle = () => v.paused ? v.play().catch(() => {}) : v.pause();
+  $(".ctl.play").addEventListener("click", toggle);
+  v.addEventListener("click", toggle);
+  $(".ctl.step").addEventListener("click", () => { v.pause(); v.currentTime = Math.min(v.duration || 0, v.currentTime + 1 / FPS); });
+  $(".ctl.mute").addEventListener("click", () => { v.muted = !v.muted; });
+  $(".fit").addEventListener("change", e => $(".screen").classList.toggle("fill", e.target.value === "fill"));
+  $(".ctl.full").addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else $(".screen").requestFullscreen?.().catch(() => {});
+  });
+
+  // Scrub: press anywhere on the timeline and drag.
+  const seekTo = e => {
+    const r = timeline.getBoundingClientRect(), d = v.duration;
+    if (!isFinite(d)) return;
+    v.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left - 12) / (r.width - 24))) * d;
+    tick();
+  };
+  timeline.addEventListener("pointerdown", e => { timeline.setPointerCapture(e.pointerId); v.pause(); seekTo(e); });
+  timeline.addEventListener("pointermove", e => { if (timeline.hasPointerCapture(e.pointerId)) seekTo(e); });
+
+  // ── inputs: sidebar asset cards ───────────────────────────────────────────
+  el.querySelectorAll(".asset").forEach(card => {
+    const kind = card.dataset.kind, input = card.querySelector("input"), thumb = card.querySelector(".thumb");
+    const menu = card.querySelector(".menu"), more = card.querySelector(".more");
     let url = null;
     const set = file => {
       if (url) URL.revokeObjectURL(url);
-      drop.querySelector("img,video")?.remove();
+      url = null;
+      thumb.querySelector("img,video")?.remove();
       files[kind] = file || null;
-      drop.classList.toggle("has", !!file);
+      card.classList.toggle("has", !!file);
+      card.querySelector(".swap span").textContent = `${file ? "Replace" : "Choose"} ${kind}`;
+      card.querySelector('[data-act="clear"]').disabled = !file;
       if (file) {
         url = URL.createObjectURL(file);
         const m = document.createElement(kind === "image" ? "img" : "video");
-        m.src = url;
-        if (kind === "video") { m.muted = true; m.controls = true; m.playsInline = true; }
-        drop.prepend(m);
+        if (kind === "image") { m.src = url; m.alt = "Reference character"; }
+        else {
+          m.muted = true; m.playsInline = true; m.preload = "metadata"; m.src = `${url}#t=0.1`;
+          m.addEventListener("loadedmetadata", () => {
+            card.querySelector(".fd").textContent = `${clock(m.duration)}  •  ${m.videoWidth} × ${m.videoHeight}`;
+          });
+        }
+        thumb.prepend(m);
       }
-      // A preview element sits over the input; keep the input clickable only when empty.
-      input.style.display = file ? "none" : "";
+      if (kind === "video") {
+        card.querySelector(".fmeta").hidden = !file;
+        card.querySelector(".fn").textContent = file ? file.name : "";
+        card.querySelector(".fd").textContent = "";
+        setMedia("source", file ? { src: url, size: file.size } : null);
+      }
       refresh();
     };
-    input.addEventListener("change", () => set(input.files[0]));
-    drop.querySelector(".clear").addEventListener("click", e => {
-      e.preventDefault(); input.value = ""; set(null);
+    const pick = () => input.click();
+    input.addEventListener("change", () => { if (input.files[0]) set(input.files[0]); });
+    thumb.addEventListener("click", pick);
+    card.querySelector(".swap").addEventListener("click", pick);
+
+    const close = () => { menu.hidden = true; more.setAttribute("aria-expanded", "false"); };
+    more.addEventListener("click", e => {
+      e.stopPropagation();
+      const open = menu.hidden;
+      document.querySelectorAll(".asset .menu").forEach(m => m.hidden = true);
+      menu.hidden = !open; more.setAttribute("aria-expanded", String(open));
     });
-    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
-    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-    drop.addEventListener("drop", e => {
-      e.preventDefault(); drop.classList.remove("over");
+    document.addEventListener("click", e => { if (!menu.contains(e.target)) close(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+    menu.querySelector('[data-act="pick"]').addEventListener("click", () => { close(); pick(); });
+    menu.querySelector('[data-act="clear"]').addEventListener("click", () => { close(); input.value = ""; set(null); });
+    set(null);
+
+    card.addEventListener("dragover", e => { e.preventDefault(); card.classList.add("over"); });
+    card.addEventListener("dragleave", e => { if (!card.contains(e.relatedTarget)) card.classList.remove("over"); });
+    card.addEventListener("drop", e => {
+      e.preventDefault(); card.classList.remove("over");
       const f = e.dataTransfer.files[0];
       if (f && f.type.startsWith(kind + "/")) set(f);
     });
@@ -503,22 +840,17 @@ function makePanel(service) {
 
   function refresh() { go.disabled = busy || !files.image || !files.video; }
 
-  // ── output side ───────────────────────────────────────────────────────────
-  function show({ error = null, stage = null, meta = "", fraction = null, result = null, filename = null }) {
+  // ── job status: error / progress strip above the player ───────────────────
+  function show({ error = null, stage = null, meta = "", fraction = null, result = null, filename: name = null }) {
     $(".error").hidden = !error; $(".error").textContent = error || "";
     $(".progress").hidden = !stage;
+    $(".jobbar").hidden = !error && !stage;
     if (stage) {
       $(".stage").textContent = stage; $(".meta").textContent = meta;
       $(".bar").classList.toggle("spin", fraction == null);
       $(".bar > i").style.width = fraction == null ? "" : `${Math.round(fraction * 100)}%`;
     }
-    $(".out").hidden = !result;
-    $(".empty").hidden = !!(stage || result);
-    if (result) {
-      const v = $(".out video");
-      if (v.getAttribute("src") !== result) v.src = result;
-      $(".dl").href = result; $(".dl").download = filename || "result.mp4";
-    }
+    if (result) { filename = name; setMedia("result", { src: result, size: 0 }); }
   }
 
   function setBusy(b) { busy = b; go.textContent = b ? "Working…" : "Generate"; refresh(); }
