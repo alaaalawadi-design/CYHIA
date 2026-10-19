@@ -256,6 +256,15 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
   accounts have no owner and are hidden until `python -m app.auth assign-unowned <user>`.
   The `/gallery` and `/docs-assets` static mounts stay public (curated content). Env:
   `SIGNUP_CODE`, `ALLOW_SIGNUP`, `COOKIE_SECURE`.
+- **Admin workflow controls (added 2026-10-19):** `/admin` (`static/admin.html`) lets an admin
+  edit ~60 replace-workflow inputs (prompts, seeds, steps/cfg/sampler per stage, LoRA strengths,
+  SAM3 thresholds, SCAIL window/pose/shift, resolution, frame cap, CRF). The list and its
+  validation live in `CONTROLS` in `app/workflow_settings.py`; defaults are read from the workflow
+  JSON, and only values that differ from it are stored, in `ui_outputs/workflow_settings.json`.
+  `Adapter.build()` applies them when a job **starts**, for every user. Each result's overrides
+  are saved as `inputs/<service>/<stem>__settings.json`. Admins are made only from the CLI:
+  `python -m app.auth create-admin <user> <password>` / `set-admin <user> on|off`. To expose
+  another control, add a `Control(node, input, ...)` row; the page renders it automatically.
 - The UI shows **stage name + elapsed minutes, not a percentage** — ~100 nodes of uneven cost mean
   any fraction would be a lie.
 - The UI must start even when a backend is down (`condition: service_started`, not
@@ -266,7 +275,8 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
   mounts from the backends.
 - Uploads get UUID filenames; the two backends have separate `input/` dirs.
 - **Results are deterministic.** `app/workflows.py` leaves every seed exactly as saved in the
-  workflow JSON, so the same image + video always produce the same video. There is no re-roll:
+  workflow JSON (or as set on `/admin`), so the same image + video + settings always produce the
+  same video. There is no re-roll:
   to get a different take, change an input. (Until 2026-10-06 the adapter randomised the seven
   replace seeds and the one animate seed on every run.)
 - **Results are named by the UI, not by ComfyUI**: `_place_result()` moves each download to

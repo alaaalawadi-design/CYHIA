@@ -34,7 +34,7 @@ from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, Upload
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import auth
+from . import auth, workflow_settings
 from .auth import User
 from .mp4 import faststart
 from .comfy_client import ComfyClient, ComfyError, ComfyTimeout
@@ -106,6 +106,7 @@ class Job:
     finished: float | None = None
     error: str | None = None
     result: Path | None = None
+    settings: dict | None = None  # admin overrides this job ran with
 
     def public(self) -> dict:
         now = time.time()
@@ -340,6 +341,7 @@ def _execute(job: Job) -> None:
         # Unset in production: the workflow's own cap (1040 frames for replace)
         # decides length. Set MAX_FRAMES on a staging deployment to keep jobs short.
         cap = os.environ.get("MAX_FRAMES")
+        job.settings = workflow_settings.overrides(job.service)
         workflow = adapter.build(
             image_name, video_name, frame_cap=int(cap) if cap else None
         )
@@ -408,6 +410,11 @@ def _keep_inputs(job: Job, trimmed: float = 0.0) -> None:
     dest = INPUT_DIR / job.service
     dest.mkdir(parents=True, exist_ok=True)
     stem = job.result.stem
+    if job.settings:
+        # Which admin overrides produced this result; absent = workflow as saved.
+        (dest / f"{stem}__settings.json").write_text(
+            json.dumps(job.settings, indent=2, ensure_ascii=False)
+        )
     for kind, src in (("image", job.image), ("video", job.video)):
         if not src.is_file():
             continue
@@ -448,6 +455,12 @@ def current_user(request: Request) -> User:
     user = auth.user_for(request.cookies.get(auth.COOKIE))
     if user is None:
         raise HTTPException(401, "Please sign in.")
+    return user
+
+
+def admin_user(user: User = Depends(current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(403, "Admins only.")
     return user
 
 
@@ -493,7 +506,7 @@ def logout(request: Request):
 
 @app.get("/api/auth/me")
 def me(user: User = Depends(current_user)) -> dict:
-    return {"username": user.username}
+    return {"username": user.username, "admin": user.is_admin}
 
 
 @app.get("/api/auth/config")
@@ -566,6 +579,44 @@ def create_job(
         JOBS[job.id] = job
     EXECUTORS[service].submit(_execute, job)
     return job.public()
+
+
+# ── admin: workflow controls ─────────────────────────────────────────────────
+def _settings_view(service: str) -> dict:
+    if service not in workflow_settings.CONTROLS:
+        raise HTTPException(404, f"No editable controls for '{service}'.")
+    view = workflow_settings.describe(service, ADAPTERS[service].load())
+    view["label"] = LABELS[service]
+    return view
+
+
+@app.get("/api/admin/workflows")
+def admin_workflows(_: User = Depends(admin_user)) -> list[dict]:
+    return [{"service": s, "label": LABELS[s]} for s in workflow_settings.CONTROLS]
+
+
+@app.get("/api/admin/workflows/{service}")
+def admin_get_workflow(service: str, _: User = Depends(admin_user)) -> dict:
+    return _settings_view(service)
+
+
+@app.put("/api/admin/workflows/{service}")
+def admin_put_workflow(
+    service: str, values: dict = Body(..., embed=True), user: User = Depends(admin_user)
+) -> dict:
+    _settings_view(service)  # 404 for an unknown service
+    try:
+        workflow_settings.save(service, ADAPTERS[service].load(), values, user.username)
+    except workflow_settings.SettingsError as e:
+        raise HTTPException(400, str(e)) from None
+    return _settings_view(service)
+
+
+@app.delete("/api/admin/workflows/{service}")
+def admin_reset_workflow(service: str, user: User = Depends(admin_user)) -> dict:
+    _settings_view(service)
+    workflow_settings.save(service, ADAPTERS[service].load(), {}, user.username)
+    return _settings_view(service)
 
 
 def _job(job_id: str, user: User) -> Job:
@@ -705,6 +756,16 @@ def index(request: Request):
     if auth.user_for(request.cookies.get(auth.COOKIE)) is None:
         return RedirectResponse("/login", status_code=303)
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/admin")
+def admin_page(request: Request):
+    user = auth.user_for(request.cookies.get(auth.COOKIE))
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    if not user.is_admin:
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(STATIC_DIR / "admin.html")
 
 
 @app.get("/login")

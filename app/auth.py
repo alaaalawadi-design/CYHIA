@@ -12,6 +12,12 @@ owner and are visible to nobody until assigned:
 
     python -m app.auth users
     python -m app.auth assign-unowned <username>
+
+Admins (who may edit the workflow controls on /admin) are only ever made from
+this CLI, never through sign-up:
+
+    python -m app.auth create-admin <username> <password>   # create or reset + promote
+    python -m app.auth set-admin <username> on|off
 """
 
 from __future__ import annotations
@@ -56,6 +62,7 @@ class AuthError(Exception):
 class User:
     id: int
     username: str
+    is_admin: bool = False
 
 
 def _db() -> sqlite3.Connection:
@@ -92,6 +99,10 @@ def init() -> None:
             );
             """
         )
+        # Databases made before the admin role existed lack the column.
+        cols = {r[1] for r in con.execute("PRAGMA table_info(users)")}
+        if "is_admin" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
         con.execute("DELETE FROM sessions WHERE expires < ?", (time.time(),))
 
 
@@ -150,7 +161,8 @@ def login(username: str, password: str) -> User:
     _check_fails(username)
     with _db() as con:
         row = con.execute(
-            "SELECT id, pw_hash, salt FROM users WHERE username = ?", (username,)
+            "SELECT id, pw_hash, salt, is_admin FROM users WHERE username = ?",
+            (username,),
         ).fetchone()
     # Hash even for an unknown user, so timing does not reveal which names exist.
     salt = row[2] if row else b"\0" * 16
@@ -160,7 +172,30 @@ def login(username: str, password: str) -> User:
         raise AuthError(401, "Wrong username or password.")
     with _FAILS_LOCK:
         _FAILS.pop(username, None)
-    return User(row[0], username)
+    return User(row[0], username, bool(row[3]))
+
+
+def create_admin(username: str, password: str) -> User:
+    """Create `username` as an admin, or reset its password and promote it."""
+    username = username.strip().lower()
+    if not USERNAME_RE.match(username):
+        raise AuthError(400, "Invalid username.")
+    if len(password) < MIN_PASSWORD:
+        raise AuthError(400, f"Password must be at least {MIN_PASSWORD} characters.")
+    salt = secrets.token_bytes(16)
+    with _db() as con:
+        con.execute(
+            "INSERT INTO users (username, pw_hash, salt, created, is_admin) "
+            "VALUES (?,?,?,?,1) ON CONFLICT(username) DO UPDATE SET "
+            "pw_hash = excluded.pw_hash, salt = excluded.salt, is_admin = 1",
+            (username, _hash(password, salt), salt, time.time()),
+        )
+        uid = con.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()[0]
+        # A password reset must also sign out every existing session.
+        con.execute("DELETE FROM sessions WHERE user_id = ?", (uid,))
+    return User(uid, username, True)
 
 
 # ── sessions ─────────────────────────────────────────────────────────────────
@@ -179,11 +214,12 @@ def user_for(token: str | None) -> User | None:
         return None
     with _db() as con:
         row = con.execute(
-            "SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id "
+            "SELECT u.id, u.username, u.is_admin FROM sessions s "
+            "JOIN users u ON u.id = s.user_id "
             "WHERE s.token_hash = ? AND s.expires > ?",
             (_token_hash(token), time.time()),
         ).fetchone()
-    return User(*row) if row else None
+    return User(row[0], row[1], bool(row[2])) if row else None
 
 
 def end_session(token: str | None) -> None:
@@ -227,11 +263,30 @@ def _cli(argv: list[str]) -> int:
     init()
     if argv[:1] == ["users"]:
         with _db() as con:
-            for uid, name, n in con.execute(
-                "SELECT u.id, u.username, COUNT(r.name) FROM users u "
+            for uid, name, adm, n in con.execute(
+                "SELECT u.id, u.username, u.is_admin, COUNT(r.name) FROM users u "
                 "LEFT JOIN results r ON r.user_id = u.id GROUP BY u.id ORDER BY u.id"
             ):
-                print(f"{uid:>4}  {name:<32} {n} results")
+                print(f"{uid:>4}  {name:<32} {'admin' if adm else '     '}  {n} results")
+        return 0
+    if argv[:1] == ["create-admin"] and len(argv) == 3:
+        try:
+            create_admin(argv[1], argv[2])
+        except AuthError as e:
+            print(e, file=sys.stderr)
+            return 1
+        print(f"{argv[1].lower()} is an admin")
+        return 0
+    if argv[:1] == ["set-admin"] and len(argv) == 3 and argv[2] in ("on", "off"):
+        with _db() as con:
+            cur = con.execute(
+                "UPDATE users SET is_admin = ? WHERE username = ?",
+                (int(argv[2] == "on"), argv[1].lower()),
+            )
+        if not cur.rowcount:
+            print(f"no such user: {argv[1]}", file=sys.stderr)
+            return 1
+        print(f"{argv[1].lower()}: admin {argv[2]}")
         return 0
     if argv[:1] == ["assign-unowned"] and len(argv) == 2:
         # Hand every result on disk that has no owner yet (made before accounts
@@ -257,7 +312,11 @@ def _cli(argv: list[str]) -> int:
                     n += cur.rowcount
         print(f"assigned {n} results to {argv[1]}")
         return 0
-    print("usage: python -m app.auth users | assign-unowned <username>", file=sys.stderr)
+    print(
+        "usage: python -m app.auth users | assign-unowned <username> | "
+        "create-admin <username> <password> | set-admin <username> on|off",
+        file=sys.stderr,
+    )
     return 2
 
 

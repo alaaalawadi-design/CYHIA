@@ -54,7 +54,11 @@
     font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; flex: none;
     border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--panel);
   }
-  .who button:hover { color: var(--accent); border-color: var(--line-strong); }
+  .who button:hover, .who a:hover { color: var(--accent); border-color: var(--line-strong); }
+  .who a {
+    font-size: 13px; color: var(--muted); text-decoration: none; flex: none;
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--panel);
+  }
   @media (max-width: 560px) { header.brand svg { height: 36px; } .who .as { display: none; } }
   .sub { color: var(--muted); margin: 0; font-size: 14px; }
   .hero { margin: 0 0 28px; }
@@ -296,7 +300,7 @@
       <text x="104" y="84" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="800" font-size="84" letter-spacing="2" fill="var(--wordmark)">CYHIA</text>
       <text x="108" y="112" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="600" font-size="15" letter-spacing="4.5" fill="var(--muted)">HUMAN IMAGE ANIMATION</text>
     </svg>
-    <div class="who" id="who" hidden><span class="as">Signed in as</span><b id="who-name"></b><button type="button" id="logout">Sign out</button></div>
+    <div class="who" id="who" hidden><span class="as">Signed in as</span><b id="who-name"></b><a id="admin-link" href="/admin" hidden>Admin</a><button type="button" id="logout">Sign out</button></div>
   </header>
 
   <section class="hero">
@@ -451,6 +455,7 @@ fetch("/api/auth/me").then(r => r.ok && r.json()).then(u => {
   if (!u) return;
   document.getElementById("who-name").textContent = u.username;
   document.getElementById("who").hidden = false;
+  document.getElementById("admin-link").hidden = !u.admin;
 }).catch(() => {});
 document.getElementById("logout").addEventListener("click", async () => {
   // Job ids are per user: do not let the next person on this browser resume them.

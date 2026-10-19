@@ -7,8 +7,9 @@ output, and so on. The UI and the client never need to know that "188" is the
 reference image; only this file knows. Adding a control later means touching one
 adapter, not the UI.
 
-Seeds are NOT touched here: whatever seed values are saved in the workflow JSON
-are used as they are, so the same inputs reproduce the same result.
+Seeds are NOT randomised here: whatever seed values are saved in the workflow
+JSON (or set by an admin on /admin) are used as they are, so the same inputs and
+settings reproduce the same result.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import workflow_settings
 
 # cy_hia/workflows/ holds the exported workflow JSON files.
 WORKFLOW_DIR = Path(__file__).resolve().parent.parent / "workflows"
@@ -56,9 +59,10 @@ class Adapter:
               frame_cap: int | None = None) -> dict:
         """
         image_name / video_name are names already uploaded to that ComfyUI.
-        Everything else in the workflow, seeds included, stays as saved.
+        Everything else in the workflow, seeds included, stays as saved, except
+        the controls an admin changed on /admin (app/workflow_settings.py).
         """
-        wf = self.load()
+        wf = workflow_settings.apply(self.name, self.load())
 
         # 1. inputs: point the workflow at the files we just uploaded
         wf[self.image_node]["inputs"]["image"] = image_name

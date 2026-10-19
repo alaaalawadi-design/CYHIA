@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CYHIA — Admin</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2718%27 fill=%27%23ffffff%27/%3E%3Cpath d=%27M50 20L24 50l26 30h12L36 50l26-30z%27 fill=%27%233a59d9%27/%3E%3C/svg%3E">
+<style>
+  /* Same tokens as index.html. No web font, nothing from a CDN. */
+  :root {
+    --bg: #f7f7fb; --panel: #ffffff; --panel-2: #f0f1f9; --text: #1b1a1a; --muted: #55566a;
+    --line: rgba(28,25,152,.10); --line-strong: rgba(28,25,152,.22);
+    --accent: #1c1998; --accent-hover: #2621b8; --accent-text: #fff;
+    --wordmark: #1c1998; --mod: #b9791f; --mod-bg: rgba(185,121,31,.10);
+    --shadow: 0 8px 24px rgba(28,25,152,.08), 0 2px 6px rgba(28,25,152,.04);
+    --ok: #106945; --bad: #bc0424; --err-bg: #fbe9ec; --nav-bg: rgba(255,255,255,.82);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0a26; --panel: #12103e; --panel-2: #0e0d33; --text: #ececfa; --muted: #9c9dc8;
+      --line: rgba(127,162,244,.14); --line-strong: rgba(127,162,244,.3);
+      --accent: #3a59d9; --accent-hover: #5b8aff; --accent-text: #fff;
+      --wordmark: #ffffff; --mod: #e6a451; --mod-bg: rgba(230,164,81,.12);
+      --shadow: 0 8px 24px rgba(0,0,0,.35);
+      --ok: #6ed9a4; --bad: #ff6b7d; --err-bg: #3a0f1a; --nav-bg: rgba(18,16,62,.82);
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; color: var(--text); min-height: 100vh;
+    font: 15px/1.55 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(58,89,217,.10), transparent 60%),
+      radial-gradient(900px 600px at -10% 30%, rgba(188,4,36,.06), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 120px; }
+  header.brand {
+    display: flex; align-items: center; gap: 16px; margin: 0 0 28px; padding: 10px 22px;
+    background: var(--nav-bg); border: 1px solid var(--line); border-radius: 999px;
+    backdrop-filter: saturate(160%) blur(18px); box-shadow: var(--shadow);
+  }
+  header.brand svg { height: 44px; width: auto; display: block; flex: none; }
+  .who { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); min-width: 0; }
+  .who b { color: var(--text); font-weight: 600; }
+  .pill {
+    font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; text-decoration: none; flex: none;
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--panel);
+  }
+  .pill:hover { color: var(--accent); border-color: var(--line-strong); }
+  @media (max-width: 560px) { header.brand svg { height: 32px; } .who .as { display: none; } }
+
+  h1 { font-size: clamp(24px, 3.4vw, 34px); letter-spacing: -.02em; line-height: 1.1; font-weight: 600; margin: 0 0 8px; }
+  .lede { color: var(--muted); margin: 0 0 6px; max-width: 72ch; }
+  .meta { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 18px; }
+  .search {
+    flex: 1 1 240px; font: inherit; color: var(--text); background: var(--panel);
+    border: 1px solid var(--line-strong); border-radius: 999px; padding: 8px 16px;
+  }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
+
+  .group { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); margin: 0 0 16px; }
+  .group > summary {
+    list-style: none; cursor: pointer; padding: 14px 20px; display: flex; align-items: center; gap: 10px;
+    font-weight: 600; font-size: 16px;
+  }
+  .group > summary::-webkit-details-marker { display: none; }
+  .group > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+  .group[open] > summary::before { transform: rotate(90deg); }
+  .group .count { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--mod); background: var(--mod-bg); border-radius: 999px; padding: 2px 10px; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px 18px; padding: 4px 20px 20px; }
+  .field { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .field.wide { grid-column: 1 / -1; }
+  .field .top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .field label { font-size: 13px; font-weight: 600; }
+  .field .node { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .field .undo {
+    margin-left: auto; flex: none; font: inherit; font-size: 12px; border: 0; padding: 0; background: none;
+    color: var(--mod); cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+  }
+  .field.mod input, .field.mod select, .field.mod textarea { border-color: var(--mod); background: var(--mod-bg); }
+  .field.dirty label::after { content: " •"; color: var(--accent); }
+  .field .help { font-size: 12px; color: var(--muted); margin: 0; }
+  .field .def { font-size: 12px; color: var(--muted); margin: 0; overflow-wrap: anywhere; }
+  input[type=number], input[type=text], select, textarea {
+    width: 100%; font: inherit; font-size: 14px; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 10px;
+  }
+  textarea { min-height: 84px; resize: vertical; line-height: 1.45; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input:invalid { border-color: var(--bad); }
+  .switch { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 0; }
+
+  .bar {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 10;
+    width: min(1068px, calc(100% - 32px)); display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 10px 14px; background: var(--nav-bg); border: 1px solid var(--line-strong); border-radius: 14px;
+    backdrop-filter: saturate(160%) blur(18px); box-shadow: var(--shadow);
+  }
+  .bar .state { font-size: 14px; color: var(--muted); margin-right: auto; }
+  .bar .state.err { color: var(--bad); }
+  .bar .state.ok { color: var(--ok); }
+  .btn {
+    font: inherit; font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--text);
+  }
+  .btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-text); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .error { background: var(--err-bg); color: var(--bad); border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="brand">
+    <svg viewBox="0 0 560 120" role="img" aria-label="CYHIA — Human Image Animation">
+      <path d="M40 16 L14 60 L40 104 L58 104 L32 60 L58 16Z" fill="#bc0424"/>
+      <path d="M62 8 L30 60 L62 112 L86 112 L54 60 L86 8Z" fill="#3a59d9"/>
+      <text x="104" y="84" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="800" font-size="84" letter-spacing="2" fill="var(--wordmark)">CYHIA</text>
+      <text x="108" y="112" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="600" font-size="15" letter-spacing="4.5" fill="var(--muted)">HUMAN IMAGE ANIMATION</text>
+    </svg>
+    <div class="who"><span class="as">Admin</span><b id="who-name"></b>
+      <a class="pill" href="/">Back to app</a><button class="pill" type="button" id="logout">Sign out</button></div>
+  </header>
+
+  <h1 id="title">Workflow controls</h1>
+  <p class="lede">Settings for the workflow, apart from the input image and video. Changes apply to every job that
+    <em>starts</em> after you save, for all users. Controls you leave unchanged run exactly as saved in the workflow JSON.</p>
+  <p class="meta" id="meta"></p>
+
+  <div class="error" id="load-err" hidden></div>
+
+  <div class="toolbar" id="toolbar" hidden>
+    <select id="service" class="search" style="flex:0 1 220px" hidden></select>
+    <input class="search" id="filter" type="search" placeholder="Filter controls (name, node id, prompt text)…">
+    <label class="toggle"><input type="checkbox" id="only-mod"> Changed only</label>
+  </div>
+  <div id="groups"></div>
+</main>
+
+<div class="bar" id="bar" hidden>
+  <span class="state" id="state">No unsaved changes</span>
+  <button class="btn" type="button" id="reset-all" title="Remove every override for this workflow">Reset all to workflow</button>
+  <button class="btn" type="button" id="discard" disabled>Discard</button>
+  <button class="btn primary" type="button" id="save" disabled>Save</button>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const el = (tag, props = {}, ...kids) => {
+  const e = Object.assign(document.createElement(tag), props);
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+};
+
+let service = null, view = null, draft = {};   // draft: key -> value currently in the form
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (r.status === 401) { location.replace("/login"); throw new Error("Signed out."); }
+  if (r.status === 403) { location.replace("/"); throw new Error("Admins only."); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : `HTTP ${r.status}`);
+  return j;
+}
+
+const same = (a, b) => a === b || (typeof a === "number" && typeof b === "number" && Math.abs(a - b) < 1e-9);
+const changes = () => view.controls.filter(c => !same(draft[c.key], c.value));
+
+function fmt(v) {
+  if (typeof v === "boolean") return v ? "on" : "off";
+  if (typeof v === "string") return v.length > 90 ? `“${v.slice(0, 90)}…”` : `“${v}”`;
+  return String(v);
+}
+
+function input(c) {
+  const v = draft[c.key];
+  let e;
+  if (c.type === "text") {
+    e = el("textarea", { value: v ?? "", rows: Math.min(8, Math.max(2, Math.ceil(String(v ?? "").length / 110))) });
+  } else if (c.type === "choice") {
+    e = el("select");
+    for (const o of c.choices) e.append(el("option", { value: o, textContent: o, selected: o === v }));
+    if (!c.choices.includes(v)) e.prepend(el("option", { value: v, textContent: `${v} (not offered)`, selected: true }));
+  } else if (c.type === "bool") {
+    e = el("input", { type: "checkbox", checked: !!v });
+  } else {
+    e = el("input", { type: "number", value: v ?? "", inputMode: c.type === "int" ? "numeric" : "decimal" });
+    if (c.min != null) e.min = c.min;
+    if (c.max != null) e.max = c.max;
+    e.step = c.step ?? "any";
+  }
+  e.id = `f-${c.key}`;
+  const read = () => {
+    if (c.type === "bool") return e.checked;
+    if (c.type === "int") return e.value === "" ? null : Number(e.value);
+    if (c.type === "float") return e.value === "" ? null : parseFloat(e.value);
+    return e.value;
+  };
+  e.addEventListener("input", () => { draft[c.key] = read(); mark(c); refreshBar(); });
+  e.addEventListener("change", () => { draft[c.key] = read(); mark(c); refreshBar(); });
+  return e;
+}
+
+function mark(c) {
+  const f = document.querySelector(`[data-key="${CSS.escape(c.key)}"]`);
+  if (!f) return;
+  const differs = !same(draft[c.key], c.default);
+  f.classList.toggle("mod", differs);
+  f.classList.toggle("dirty", !same(draft[c.key], c.value));
+  f.querySelector(".undo").hidden = !differs;
+  const g = f.closest("details"), n = g.querySelectorAll(".field.mod").length;
+  g.querySelector(".count").hidden = !n;
+  g.querySelector(".count").textContent = `${n} changed`;
+}
+
+function render() {
+  const root = $("groups");
+  const open = new Set([...root.querySelectorAll("details[open]")].map(d => d.dataset.group));
+  root.replaceChildren();
+  const groups = new Map();
+  for (const c of view.controls) (groups.get(c.group) || groups.set(c.group, []).get(c.group)).push(c);
+  for (const [name, list] of groups) {
+    const d = el("details", { className: "group", open: open.size ? open.has(name) : true });
+    d.dataset.group = name;
+    d.append(el("summary", {}, name, el("span", { className: "count", hidden: true })));
+    const box = el("div", { className: "fields" });
+    for (const c of list) {
+      const f = el("div", { className: `field${c.type === "text" ? " wide" : ""}` });
+      f.dataset.key = c.key;
+      f.dataset.search = `${c.label} ${c.key} ${c.title} ${name} ${typeof c.value === "string" ? c.value : ""}`.toLowerCase();
+      const undo = el("button", { type: "button", className: "undo", textContent: "use workflow value", hidden: true });
+      undo.addEventListener("click", () => { draft[c.key] = c.default; render(); refreshBar(); });
+      f.append(
+        el("div", { className: "top" },
+          el("label", { htmlFor: `f-${c.key}`, textContent: c.label }),
+          el("span", { className: "node", textContent: `#${c.node}${c.title ? " · " + c.title : ""} · ${c.input}`, title: `${c.title} — node ${c.node}, input ${c.input}` }),
+          undo),
+        c.type === "bool"
+          ? el("label", { className: "switch" }, input(c), c.label)
+          : input(c),
+        c.help ? el("p", { className: "help", textContent: c.help }) : null,
+        el("p", { className: "def", textContent: `Workflow value: ${fmt(c.default)}` }),
+      );
+      box.append(f);
+    }
+    d.append(box);
+    root.append(d);
+    for (const c of list) mark(c);
+  }
+  applyFilter();
+}
+
+function applyFilter() {
+  const q = $("filter").value.trim().toLowerCase(), only = $("only-mod").checked;
+  for (const d of $("groups").children) {
+    let shown = 0;
+    for (const f of d.querySelectorAll(".field")) {
+      const ok = (!q || f.dataset.search.includes(q)) && (!only || f.classList.contains("mod"));
+      f.hidden = !ok; shown += ok;
+    }
+    d.hidden = !shown;
+    if (q || only) d.open = shown > 0;
+  }
+}
+$("filter").addEventListener("input", applyFilter);
+$("only-mod").addEventListener("change", applyFilter);
+
+function setState(text, cls = "") { $("state").textContent = text; $("state").className = `state ${cls}`; }
+
+function refreshBar() {
+  const n = changes().length;
+  $("save").disabled = $("discard").disabled = !n;
+  setState(n ? `${n} unsaved change${n > 1 ? "s" : ""}` : "No unsaved changes");
+  $("reset-all").disabled = !view.controls.some(c => c.modified);
+}
+
+function showMeta() {
+  const mods = view.controls.filter(c => c.modified).length;
+  const when = view.updated ? new Date(view.updated * 1000).toLocaleString() : null;
+  $("meta").textContent = `${view.label} · ${view.controls.length} controls · ${mods} differ from the workflow` +
+    (when ? ` · last saved ${when}${view.updated_by ? " by " + view.updated_by : ""}` : "");
+}
+
+function load(v) {
+  view = v;
+  draft = Object.fromEntries(v.controls.map(c => [c.key, c.value]));
+  $("title").textContent = `Workflow controls — ${v.label}`;
+  showMeta(); render(); refreshBar();
+  $("toolbar").hidden = $("bar").hidden = false;
+}
+
+async function open(s) {
+  service = s;
+  try { load(await api(`/api/admin/workflows/${s}`)); }
+  catch (e) { $("load-err").textContent = `Could not load the controls: ${e.message}`; $("load-err").hidden = false; }
+}
+
+$("save").addEventListener("click", async () => {
+  const bad = view.controls.find(c => draft[c.key] === null || Number.isNaN(draft[c.key]));
+  if (bad) return setState(`${bad.label}: enter a value.`, "err");
+  $("save").disabled = true;
+  setState("Saving…");
+  try {
+    // Send the full set: anything equal to the workflow value is dropped server-side.
+    const values = Object.fromEntries(view.controls.filter(c => !same(draft[c.key], c.default)).map(c => [c.key, draft[c.key]]));
+    load(await api(`/api/admin/workflows/${service}`, { method: "PUT", body: JSON.stringify({ values }) }));
+    setState("Saved. New jobs will use these settings.", "ok");
+  } catch (e) {
+    setState(e.message, "err");
+    $("save").disabled = false;
+  }
+});
+$("discard").addEventListener("click", () => load(view));
+$("reset-all").addEventListener("click", async () => {
+  if (!confirm("Remove every change and run the workflow exactly as saved in its JSON?")) return;
+  try {
+    load(await api(`/api/admin/workflows/${service}`, { method: "DELETE" }));
+    setState("All controls reset to the workflow values.", "ok");
+  } catch (e) { setState(e.message, "err"); }
+});
+window.addEventListener("beforeunload", e => { if (view && changes().length) { e.preventDefault(); e.returnValue = ""; } });
+
+$("logout").addEventListener("click", async () => {
+  try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
+  location.replace("/login");
+});
+
+(async () => {
+  try {
+    const me = await api("/api/auth/me");
+    $("who-name").textContent = me.username;
+    const list = await api("/api/admin/workflows");
+    if (list.length > 1) {
+      for (const w of list) $("service").append(el("option", { value: w.service, textContent: w.label }));
+      $("service").hidden = false;
+      $("service").addEventListener("change", () => {
+        if (view && changes().length && !confirm("Discard unsaved changes?")) { $("service").value = service; return; }
+        open($("service").value);
+      });
+    }
+    if (list.length) await open(list[0].service);
+  } catch (e) {
+    $("load-err").textContent = e.message; $("load-err").hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
