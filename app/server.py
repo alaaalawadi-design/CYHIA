@@ -1,21 +1,31 @@
 """
-cy_hia — one HTML page over two ComfyUI GPU backends.
+cy_hia — one HTML page over any number of ComfyUI GPU backends.
 
-  Animate tab  -> comfy-animate (GPU 1)  WAN 2.2 Animate
-  Replace tab  -> comfy-replace (GPU 0)  SCAIL-2 character replacement
+Which workflows exist (one tab each) comes from workflows/workflows.json; which
+ComfyUI servers run them, and on which GPU, from generated/services.json, which
+./start.sh writes after counting the GPUs. Without that file the old two-GPU
+layout is used (replace on GPU 0, animate on GPU 1), so the hand-written
+docker-compose.yml still works.
 
-A small FastAPI server holds the jobs; the page (static/index.html) uploads,
-then polls. Each backend gets its own single-worker executor, so the two GPUs
-work in parallel while jobs *for one GPU* run strictly one at a time — a second
-concurrent ComfyUI job would only fight for VRAM.
+Scheduling: every job goes into ONE waiting list, in the order users submitted
+it. Each GPU has one worker thread, which takes the oldest waiting job that a
+server on its GPU can run. So:
+  - one GPU shared by several workflows runs their jobs one at a time, strictly
+    in submission order, whatever the tab;
+  - separate GPUs run in parallel, and a job never waits behind a job for a
+    different GPU;
+  - a workflow on several GPUs runs that many of its jobs at once.
+Before a job starts on a GPU that another server last used, that other server
+is told to unload its models, so the job gets the whole card.
 
-Jobs live in memory. A page reload resumes tracking (the page remembers its job
-ids), but restarting this server forgets running jobs — ComfyUI keeps executing
-them and the result still lands in that backend's output/ dir.
+Jobs live in memory. A page reload resumes tracking (the page asks the server
+for the user's jobs), but restarting this server forgets them — ComfyUI keeps
+executing a running one and its result still lands in that backend's output/.
 """
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import re
@@ -25,7 +35,8 @@ import threading
 import time
 import traceback
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from collections import Counter
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
@@ -38,7 +49,7 @@ from . import auth, workflow_settings
 from .auth import User
 from .mp4 import faststart
 from .comfy_client import ComfyClient, ComfyError, ComfyTimeout
-from .workflows import ANIMATE, REPLACE, Adapter
+from .workflows import ADAPTERS, Adapter
 
 OUT_DIR = Path(os.environ.get("OUT_DIR", "/app/outputs"))
 UPLOAD_DIR = OUT_DIR / "uploads"
@@ -59,34 +70,92 @@ DOCS_DIR = Path(
     )
 )
 
-# Replacement costs ~3 min fixed plus ~3.3 s/frame (measured), so a full
-# 1040-frame job runs about 60 min. Three hours leaves room for a cold model load
-# and a queued job ahead of it without stranding the user on a hang.
-TIMEOUTS = {"replace": 3 * 3600.0, "animate": 2 * 3600.0}
-
-# Per backend: at ~1 h a job, a longer queue is a day of waiting nobody wants.
+# ── limits ───────────────────────────────────────────────────────────────────
+# How many jobs ONE user may have waiting or running in ONE tab at the same
+# time. Pressing Generate again beyond this is refused until one finishes.
+MAX_PER_USER = 5
+# How many jobs ALL users together may have waiting or running in one tab.
+# At ~1 h a replacement job, a longer queue is a day of waiting nobody wants.
 MAX_WAITING = 10
 # Finished jobs kept for the status endpoint; their output files are not deleted.
 KEEP_FINISHED = 200
+# Before a job starts on a GPU another server used last, wait (up to this many
+# seconds) for that server to give its memory back.
+FREE_VRAM_WAIT = 60.0
+# ...until at least this share of the card is free.
+FREE_VRAM_SHARE = 0.85
 
-# Warm-up frames cut from the start of the result AND of the saved input video,
-# per service. 0 turns trimming off for that service. At the workflows' 24 fps
-# these 6 frames are 0.25 s.
-TRIM_FRAMES = {"replace": 10, "animate": 10}
-
-BACKENDS = {
-    "animate": ComfyClient(
-        os.environ.get("ANIMATE_URL", "http://comfy-animate:8134"), name="animate"
-    ),
-    "replace": ComfyClient(
-        os.environ.get("REPLACE_URL", "http://comfy-replace:8136"), name="replace"
-    ),
-}
-ADAPTERS = {"animate": ANIMATE, "replace": REPLACE}
-LABELS = {"animate": "Animate (GPU 1)", "replace": "Replace (GPU 0)"}
+# Timeouts and warm-up trimming are per workflow: see workflows/workflows.json.
 
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 VIDEO_EXT = {".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"}
+
+
+# ── backends: which ComfyUI server runs which workflow on which GPU ──────────
+SERVICES_FILE = Path(
+    os.environ.get(
+        "SERVICES_FILE",
+        Path(__file__).resolve().parents[1] / "generated" / "services.json",
+    )
+)
+
+
+@dataclass
+class Backend:
+    name: str  # compose service name: comfy-replace, comfy-replace-2, ...
+    workflow: str  # key in workflows.json
+    gpu: int  # host GPU index
+    client: ComfyClient
+    up: bool = False  # refreshed every few seconds by _health_loop
+
+
+def _load_backends() -> tuple[list[Backend], list[dict], str]:
+    """Backends from generated/services.json, else the old fixed layout."""
+    if SERVICES_FILE.is_file():
+        spec = json.loads(SERVICES_FILE.read_text())
+        rows, gpu_info, source = spec["backends"], spec.get("gpus", []), str(SERVICES_FILE)
+    else:
+        # No start.sh run: one server per workflow at its default GPU and URL,
+        # overridable per workflow with <NAME>_URL / <NAME>_GPU.
+        rows = [
+            {
+                "name": f"comfy-{n}",
+                "workflow": n,
+                "gpu": int(os.environ.get(f"{n.upper()}_GPU", a.default_gpu)),
+                "url": os.environ.get(f"{n.upper()}_URL", f"http://comfy-{n}:{a.port}"),
+            }
+            for n, a in ADAPTERS.items()
+        ]
+        gpu_info, source = [], "built-in defaults (no generated/services.json)"
+    out = []
+    for r in rows:
+        if r["workflow"] not in ADAPTERS:
+            print(f"WARNING: backend {r['name']} runs unknown workflow {r['workflow']!r}; ignored")
+            continue
+        out.append(
+            Backend(r["name"], r["workflow"], int(r["gpu"]), ComfyClient(r["url"], name=r["name"]))
+        )
+    return out, gpu_info, source
+
+
+BACKENDS, GPU_INFO, BACKENDS_SOURCE = _load_backends()
+# Workflows that have at least one server: these get a tab. Catalog order.
+SERVICES = [n for n in ADAPTERS if any(b.workflow == n for b in BACKENDS)]
+BY_WORKFLOW = {n: [b for b in BACKENDS if b.workflow == n] for n in SERVICES}
+GPUS = {g: [b for b in BACKENDS if b.gpu == g] for g in sorted({b.gpu for b in BACKENDS})}
+GPUS_FOR = {n: {b.gpu for b in bs} for n, bs in BY_WORKFLOW.items()}
+
+
+def _label(service: str) -> str:
+    """'Replace character (GPU 0, shared with Animate)'"""
+    gpus = sorted(GPUS_FOR.get(service, ()))
+    others = sorted(
+        {ADAPTERS[b.workflow].label for g in gpus for b in GPUS[g] if b.workflow != service}
+    )
+    where = f"GPU {', '.join(map(str, gpus))}" if gpus else "no GPU"
+    if others:
+        where += f", shared with {', '.join(others)}"
+    return f"{ADAPTERS[service].label} ({where})"
 
 
 # ── jobs ─────────────────────────────────────────────────────────────────────
@@ -97,6 +166,7 @@ class Job:
     image: Path
     video: Path
     user_id: int = 0  # who submitted it; only they can see it or its result
+    seq: int = 0  # submission order across ALL tabs; the queue runs by this
     state: str = "queued"  # queued | running | done | error
     stage: str = "Waiting for the GPU"
     step: int = 0
@@ -107,19 +177,25 @@ class Job:
     error: str | None = None
     result: Path | None = None
     settings: dict | None = None  # admin overrides this job ran with
+    backend: str | None = None  # server that ran it
+    gpu: int | None = None
+    dismissed: bool = False  # the user removed it from their job list
 
     def public(self) -> dict:
         now = time.time()
         return {
             "id": self.id,
             "service": self.service,
+            "seq": self.seq,
             "state": self.state,
             "stage": self.stage,
             "step": self.step,
             "steps": self.steps,
             # Seconds rather than timestamps, so client clock skew is irrelevant.
             "elapsed": ((self.finished or now) - self.started) if self.started else 0.0,
+            "waited": ((self.started or now) - self.created),
             "ahead": _ahead(self),
+            "gpu": self.gpu,
             "error": self.error,
             "result": f"/api/jobs/{self.id}/video" if self.result else None,
             "filename": self.result.name if self.result else None,
@@ -127,25 +203,125 @@ class Job:
 
 
 JOBS: dict[str, Job] = {}
-LOCK = threading.Lock()
-EXECUTORS = {
-    name: ThreadPoolExecutor(max_workers=1, thread_name_prefix=name)
-    for name in BACKENDS
-}
+# One lock for JOBS and the queue. A Condition so GPU workers can sleep until a
+# job is added or one finishes; re-entrant because public() takes it again.
+LOCK = threading.Condition(threading.RLock())
+_SEQ = itertools.count(1)
+ACTIVE = ("queued", "running")
 
 
 def _ahead(job: Job) -> int:
-    """Jobs from this UI that will run on the same GPU before this one."""
+    """
+    Jobs submitted earlier that will use one of this job's GPUs first, from
+    every tab and every user: on a shared GPU an Animate job ahead of a Replace
+    job counts, on separate GPUs it does not.
+    """
     if job.state != "queued":
         return 0
+    mine = GPUS_FOR.get(job.service, set())
     with LOCK:
         return sum(
             1
             for j in JOBS.values()
-            if j.service == job.service
-            and j.created < job.created
-            and j.state in ("queued", "running")
+            if j.seq < job.seq
+            and (
+                (j.state == "running" and j.gpu in mine)
+                or (j.state == "queued" and GPUS_FOR.get(j.service, set()) & mine)
+            )
         )
+
+
+# ── the scheduler: one worker per GPU over one shared waiting list ───────────
+def _fail(job: Job, message: str) -> None:
+    job.state, job.error, job.finished = "error", message, time.time()
+    for p in (job.image, job.video):
+        p.unlink(missing_ok=True)
+
+
+def _pick(gpu: int) -> tuple[Job, Backend] | None:
+    """The oldest waiting job a live server on `gpu` can run. Caller holds LOCK."""
+    for job in sorted((j for j in JOBS.values() if j.state == "queued"), key=lambda j: j.seq):
+        if not any(b.up for b in BY_WORKFLOW.get(job.service, [])):
+            # Nothing anywhere can run it; failing it now keeps it from
+            # holding up the jobs behind it.
+            _fail(
+                job,
+                f"The {_label(job.service)} server is not reachable. "
+                "Other tabs may still work.",
+            )
+            continue
+        here = [b for b in GPUS[gpu] if b.workflow == job.service and b.up]
+        if here:
+            return job, here[0]
+        # Otherwise a server on another GPU will take it: look further down.
+    return None
+
+
+def _make_room(gpu: int, backend: Backend, job: Job) -> None:
+    """Have every other server on this GPU unload its models before `job` runs."""
+    others = [b for b in GPUS[gpu] if b is not backend]
+    if not others:
+        return
+    job.stage = "Freeing GPU memory"
+    for b in others:
+        b.client.free()
+    deadline = time.time() + FREE_VRAM_WAIT
+    while time.time() < deadline:
+        v = backend.client.vram()
+        if v is None or v[0] >= FREE_VRAM_SHARE * v[1]:
+            return
+        time.sleep(2)
+    v = backend.client.vram()
+    print(
+        f"GPU {gpu}: only {v[0] / 2**30:.1f} of {v[1] / 2**30:.1f} GiB free after "
+        f"{FREE_VRAM_WAIT:.0f}s; starting {job.service} job {job.id} anyway"
+        if v
+        else f"GPU {gpu}: cannot read free memory; starting job {job.id} anyway"
+    )
+
+
+def _gpu_worker(gpu: int) -> None:
+    last: str | None = None  # server that ran the previous job on this GPU
+    while True:
+        try:
+            with LOCK:
+                pick = _pick(gpu)
+                while pick is None:
+                    LOCK.wait(timeout=5.0)
+                    pick = _pick(gpu)
+                job, backend = pick
+                job.state, job.started = "running", time.time()
+                job.backend, job.gpu = backend.name, gpu
+                job.stage = "Starting"
+            # `last` is None after a restart: the other server may still hold
+            # memory from before, so free it then too.
+            if last != backend.name:
+                _make_room(gpu, backend, job)
+            last = backend.name
+            _execute(job, backend)
+        except Exception:  # noqa: BLE001 - a worker must never die
+            traceback.print_exc()
+            time.sleep(1)
+        finally:
+            with LOCK:
+                LOCK.notify_all()
+
+
+def _health_loop() -> None:
+    while True:
+        for b in BACKENDS:
+            b.up = b.client.is_up()
+        with LOCK:
+            LOCK.notify_all()  # a server that came back may unblock a GPU
+        time.sleep(10)
+
+
+def _start_scheduler() -> None:
+    for b in BACKENDS:  # before any worker looks at .up
+        b.up = b.client.is_up()
+    threading.Thread(target=_health_loop, name="health", daemon=True).start()
+    for gpu in GPUS:
+        threading.Thread(target=_gpu_worker, args=(gpu,), name=f"gpu{gpu}", daemon=True).start()
 
 
 def _prune() -> None:
@@ -323,15 +499,15 @@ def _trim_warmup(result: Path, frames: int) -> float:
     return seconds if _trim(result, result, seconds) else 0.0
 
 
-def _execute(job: Job) -> None:
+def _execute(job: Job, backend: Backend) -> None:
+    """Run one job on `backend`. The GPU worker has already marked it running."""
     adapter: Adapter = ADAPTERS[job.service]
-    client = BACKENDS[job.service]
-    job.state, job.started = "running", time.time()
+    client = backend.client
     try:
         if not client.is_up():
             raise ComfyError(
-                f"The {LABELS[job.service]} backend is not reachable "
-                f"({client.base_url}). The other tab may still work."
+                f"The {_label(job.service)} server is not reachable "
+                f"({client.base_url}). Other tabs may still work."
             )
 
         job.stage = "Uploading inputs"
@@ -354,9 +530,7 @@ def _execute(job: Job) -> None:
             job.step, job.steps = p.step, p.steps
 
         job.stage = "Submitting"
-        result = client.run(
-            workflow, timeout=TIMEOUTS[job.service], on_progress=on_progress
-        )
+        result = client.run(workflow, timeout=adapter.timeout, on_progress=on_progress)
 
         finals = [v for v in result.videos if v["node_id"] == adapter.output_node]
         if not finals:
@@ -374,9 +548,9 @@ def _execute(job: Job) -> None:
         # How much was actually cut off the result, in seconds. The saved input is
         # then cut by the same duration, so the two line up in History.
         trimmed = 0.0
-        if TRIM_FRAMES.get(job.service, 0) > 0:
+        if adapter.trim_frames > 0:
             job.stage = "Trimming"
-            trimmed = _trim_warmup(downloaded, TRIM_FRAMES[job.service])
+            trimmed = _trim_warmup(downloaded, adapter.trim_frames)
         if not trimmed:
             faststart(downloaded)  # so the browser can start playing at once
             # (a successful trim already wrote faststart)
@@ -448,7 +622,13 @@ def _save(upload: UploadFile, allowed: set[str], kind: str) -> Path:
 
 
 # ── http ─────────────────────────────────────────────────────────────────────
-app = FastAPI(title="cy_hia", docs_url=None, redoc_url=None)
+@asynccontextmanager
+async def _lifespan(_app):
+    _start_scheduler()  # here, not at import, so importing this module is cheap
+    yield
+
+
+app = FastAPI(title="cy_hia", docs_url=None, redoc_url=None, lifespan=_lifespan)
 
 
 def current_user(request: Request) -> User:
@@ -515,28 +695,92 @@ def auth_config() -> dict:
     return {"signup": auth.ALLOW_SIGNUP, "code": bool(auth.SIGNUP_CODE)}
 
 
+@app.get("/api/services")
+def services(_: User = Depends(current_user)) -> dict:
+    """What the page builds its tabs from."""
+    return {
+        "max_per_user": MAX_PER_USER,
+        "gpus": GPU_INFO or [{"index": g} for g in GPUS],
+        "services": [
+            {
+                "name": n,
+                "label": ADAPTERS[n].label,
+                "blurb": ADAPTERS[n].blurb,
+                "gallery_blurb": ADAPTERS[n].gallery_blurb,
+                "gpus": sorted(GPUS_FOR[n]),
+                "servers": len(BY_WORKFLOW[n]),
+            }
+            for n in SERVICES
+        ],
+        # Workflows with results on disk but no server right now: History only.
+        "history_only": [
+            {"name": n, "label": ADAPTERS[n].label} for n in ADAPTERS if n not in SERVICES
+        ],
+    }
+
+
 @app.get("/api/status")
 def status(_: User = Depends(current_user)) -> dict:
+    with LOCK:
+        running = [j for j in JOBS.values() if j.state == "running"]
+        waiting = Counter(j.service for j in JOBS.values() if j.state == "queued")
+    busy_gpus = {j.gpu: j for j in running}
     out = {}
-    for name, client in BACKENDS.items():
-        if not client.is_up():
+    for name in SERVICES:
+        servers = BY_WORKFLOW[name]
+        live = [b for b in servers if b.up]
+        if not live:
             out[name] = {
                 "state": "offline",
-                "label": LABELS[name],
-                "detail": f"offline ({client.base_url})",
+                "label": _label(name),
+                "detail": "offline (" + ", ".join(b.client.base_url for b in servers) + ")",
             }
             continue
-        running, pending = client.queue_depth()
+        idle = [b for b in live if b.gpu not in busy_gpus]
+        if idle:
+            detail = "ready"
+        else:
+            doing = sorted({ADAPTERS[busy_gpus[b.gpu].service].label for b in live})
+            detail = "busy" if doing == [ADAPTERS[name].label] else f"busy with {', '.join(doing)}"
+        if len(servers) > 1:
+            detail += f" · {len(idle)} of {len(servers)} servers free"
+        if waiting[name]:
+            detail += f" · {waiting[name]} waiting"
         out[name] = {
-            "state": "busy" if running else "ready",
-            "label": LABELS[name],
-            "detail": (
-                (f"busy, {pending} queued" if pending else "busy")
-                if running
-                else "ready"
-            ),
+            "state": "ready" if idle else "busy",
+            "label": _label(name),
+            "detail": detail,
         }
     return out
+
+
+def _count(service: str, user_id: int | None = None) -> int:
+    """Jobs waiting or running in one tab, for one user or for everyone."""
+    with LOCK:
+        return sum(
+            1
+            for j in JOBS.values()
+            if j.service == service
+            and j.state in ACTIVE
+            and (user_id is None or j.user_id == user_id)
+        )
+
+
+def _check_limits(service: str, user: User) -> None:
+    mine = _count(service, user.id)
+    if mine >= MAX_PER_USER:
+        raise HTTPException(
+            429,
+            f"You already have {mine} {ADAPTERS[service].label} job"
+            f"{'s' if mine != 1 else ''} waiting or running (the limit is "
+            f"{MAX_PER_USER}). Generate again when one finishes.",
+        )
+    everyone = _count(service)
+    if everyone >= MAX_WAITING:
+        raise HTTPException(
+            429,
+            f"{everyone} jobs are already waiting for {_label(service)}. Try again later.",
+        )
 
 
 @app.post("/api/{service}/jobs")
@@ -546,19 +790,12 @@ def create_job(
     video: UploadFile = File(...),
     user: User = Depends(current_user),
 ) -> dict:
-    if service not in BACKENDS:
+    if service not in SERVICES:
         raise HTTPException(404, f"Unknown service '{service}'.")
-    with LOCK:
-        waiting = sum(
-            1
-            for j in JOBS.values()
-            if j.service == service and j.state in ("queued", "running")
-        )
-    if waiting >= MAX_WAITING:
+    _check_limits(service, user)
+    if not any(b.client.is_up() for b in BY_WORKFLOW[service]):
         raise HTTPException(
-            429,
-            f"{waiting} jobs are already waiting for "
-            f"{LABELS[service]}. Try again later.",
+            503, f"The {_label(service)} server is not reachable. Other tabs may still work."
         )
     img = _save(image, IMAGE_EXT, "image")
     try:
@@ -567,18 +804,49 @@ def create_job(
         img.unlink(missing_ok=True)
         raise
 
-    job = Job(
-        id=uuid.uuid4().hex,
-        service=service,
-        image=img,
-        video=vid,
-        user_id=user.id,
-        created=time.time(),
-    )
     with LOCK:
+        # Again under the lock: two uploads finishing at once must not both
+        # squeeze past the limits checked above.
+        try:
+            _check_limits(service, user)
+        except HTTPException:
+            img.unlink(missing_ok=True)
+            vid.unlink(missing_ok=True)
+            raise
+        job = Job(
+            id=uuid.uuid4().hex,
+            service=service,
+            image=img,
+            video=vid,
+            user_id=user.id,
+            seq=next(_SEQ),
+            created=time.time(),
+        )
         JOBS[job.id] = job
-    EXECUTORS[service].submit(_execute, job)
+        LOCK.notify_all()  # wake the GPU workers
     return job.public()
+
+
+@app.get("/api/jobs")
+def my_jobs(user: User = Depends(current_user)) -> list[dict]:
+    """The caller's jobs this server still knows about, oldest first: everything
+    waiting or running, plus finished ones the user has not removed."""
+    with LOCK:
+        mine = sorted(
+            (j for j in JOBS.values() if j.user_id == user.id and not j.dismissed),
+            key=lambda j: j.seq,
+        )
+        return [j.public() for j in mine]
+
+
+@app.post("/api/jobs/{job_id}/dismiss")
+def dismiss_job(job_id: str, user: User = Depends(current_user)) -> dict:
+    """Remove a finished job from the caller's list. Its result stays in History."""
+    job = _job(job_id, user)
+    if job.state in ACTIVE:
+        raise HTTPException(409, "That job has not finished yet.")
+    job.dismissed = True
+    return {"ok": True}
 
 
 # ── admin: workflow controls ─────────────────────────────────────────────────
@@ -586,13 +854,17 @@ def _settings_view(service: str) -> dict:
     if service not in workflow_settings.CONTROLS:
         raise HTTPException(404, f"No editable controls for '{service}'.")
     view = workflow_settings.describe(service, ADAPTERS[service].load())
-    view["label"] = LABELS[service]
+    view["label"] = ADAPTERS[service].label
     return view
 
 
 @app.get("/api/admin/workflows")
 def admin_workflows(_: User = Depends(admin_user)) -> list[dict]:
-    return [{"service": s, "label": LABELS[s]} for s in workflow_settings.CONTROLS]
+    return [
+        {"service": s, "label": ADAPTERS[s].label}
+        for s in workflow_settings.CONTROLS
+        if s in ADAPTERS
+    ]
 
 
 @app.get("/api/admin/workflows/{service}")
@@ -647,7 +919,7 @@ def get_video(job_id: str, user: User = Depends(current_user)):
 
 def _gallery() -> dict[str, list[dict]]:
     """Scan GALLERY_DIR on every call, so cases can be added without a restart."""
-    out: dict[str, list[dict]] = {name: [] for name in BACKENDS}
+    out: dict[str, list[dict]] = {name: [] for name in ADAPTERS}
     for service in out:
         for case in sorted(p for p in (GALLERY_DIR / service).glob("*") if p.is_dir()):
 
@@ -689,7 +961,7 @@ def history(user: User = Depends(current_user)) -> list[dict]:
     comes from the auth database."""
     mine = auth.owned(user.id)
     rows = []
-    for service in BACKENDS:
+    for service in ADAPTERS:  # also workflows with no server right now
         for f in (OUT_DIR / service).glob("*"):
             if (
                 f.is_file()
@@ -717,7 +989,7 @@ def history(user: User = Depends(current_user)) -> list[dict]:
 
 @app.get("/api/history/{service}/{name}")
 def history_video(service: str, name: str, user: User = Depends(current_user)):
-    if service not in BACKENDS:
+    if service not in ADAPTERS:
         raise HTTPException(404, f"Unknown service '{service}'.")
     root = (OUT_DIR / service).resolve()
     f = (root / name).resolve()
@@ -738,7 +1010,7 @@ def history_input(
     service: str, name: str, kind: str, user: User = Depends(current_user)
 ):
     if (
-        service not in BACKENDS
+        service not in ADAPTERS
         or kind not in ("image", "video")
         or not auth.owns(user.id, service, name)
     ):
@@ -791,20 +1063,27 @@ def main():
     # per-job cleanup in _execute cannot run in that case, and nothing else
     # ever looks in here, so the files would sit on disk forever.
     shutil.rmtree(OUT_DIR / "incoming", ignore_errors=True)
-    if any(TRIM_FRAMES.values()) and not (
+    if any(a.trim_frames for a in ADAPTERS.values()) and not (
         shutil.which("ffmpeg") and shutil.which("ffprobe")
     ):
         print(
             "WARNING: ffmpeg/ffprobe not found in this container: results will "
-            "NOT be trimmed. Install ffmpeg in the UI image or set TRIM_FRAMES to 0."
+            "NOT be trimmed. Install ffmpeg in the UI image or set trim_frames to 0 "
+            "in workflows/workflows.json."
         )
     for f in OUT_DIR.glob("*/*.mp4"):  # results saved before faststart was added
         try:
             faststart(f)
         except (OSError, ValueError) as e:
             print(f"faststart skipped for {f.name}: {e}")
-    for name, client in BACKENDS.items():
-        print(f"{name:>8}: {client.base_url}  {'up' if client.is_up() else 'DOWN'}")
+    print(f"backends from {BACKENDS_SOURCE}:")
+    for gpu, servers in GPUS.items():
+        for b in servers:
+            print(
+                f"  GPU {gpu}  {b.workflow:>8}  {b.name:<18} {b.client.base_url}  "
+                f"{'up' if b.client.is_up() else 'DOWN'}"
+            )
+    print(f"limit: {MAX_PER_USER} jobs per user per tab, {MAX_WAITING} per tab in all")
     uvicorn.run(
         app,
         host=os.environ.get("UI_HOST", "0.0.0.0"),

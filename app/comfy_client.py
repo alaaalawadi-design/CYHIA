@@ -92,6 +92,32 @@ class ComfyClient:
         except Exception:
             return (0, 0)
 
+    def vram(self) -> tuple[int, int] | None:
+        """(free, total) bytes on this server's GPU, or None if it cannot tell.
+        'free' is device-wide, so it also drops when another server on the same
+        GPU holds memory."""
+        try:
+            dev = (self._get("/system_stats", timeout=5).get("devices") or [{}])[0]
+            return int(dev["vram_free"]), int(dev["vram_total"])
+        except Exception:
+            return None
+
+    def free(self) -> bool:
+        """
+        Ask ComfyUI to unload its models and drop its caches, so another server
+        on the same GPU can use the memory. ComfyUI does the unloading on its
+        own worker thread a moment later; it never interrupts a running job.
+        """
+        try:
+            r = httpx.post(
+                f"{self.base_url}/free",
+                json={"unload_models": True, "free_memory": True},
+                timeout=30.0,
+            )
+            return r.status_code == 200
+        except Exception:
+            return False
+
     def wait_until_up(self, deadline: float = 600.0, poll: float = 5.0) -> bool:
         end = time.time() + deadline
         while time.time() < end:

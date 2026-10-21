@@ -1,11 +1,11 @@
 """
-Workflow adapters: one per service.
+Workflow adapters: one per workflow listed in workflows/workflows.json.
 
 An adapter is a small "settings card" for one ComfyUI workflow. It records which
 node id is the reference image, which is the driving video, which is the final
 output, and so on. The UI and the client never need to know that "188" is the
-reference image; only this file knows. Adding a control later means touching one
-adapter, not the UI.
+reference image; only workflows.json and this file know. Adding a workflow means
+adding an entry to workflows.json, not touching the code.
 
 Seeds are NOT randomised here: whatever seed values are saved in the workflow
 JSON (or set by an admin on /admin) are used as they are, so the same inputs and
@@ -20,26 +20,34 @@ from pathlib import Path
 
 from . import workflow_settings
 
-# cy_hia/workflows/ holds the exported workflow JSON files.
+# cy_hia/workflows/ holds the exported workflow JSON files and workflows.json.
 WORKFLOW_DIR = Path(__file__).resolve().parent.parent / "workflows"
+CATALOG_FILE = WORKFLOW_DIR / "workflows.json"
 
 
 @dataclass
 class Adapter:
     """Turns (image, video) into a ready-to-submit ComfyUI prompt graph."""
 
-    name: str                       # "replace" or "animate"
+    name: str                       # key in workflows.json: "replace", "animate", ...
     workflow_file: str              # JSON file inside cy_hia/workflows/
     image_node: str                 # LoadImage node: the reference character
     video_node: str                 # VHS_LoadVideo node: the driving video
     output_node: str                # VHS_VideoCombine node: the final result
     frame_cap_node: str | None = None    # node that limits frames
-    fps_node: str | None = None
+    prefix: str = ""                # result file names start with this
+    label: str = ""                 # tab title
+    blurb: str = ""                 # one paragraph under the tab title
+    gallery_blurb: str = ""
+    timeout: float = 2 * 3600.0     # seconds a job may run before it is abandoned
+    trim_frames: int = 0            # warm-up frames cut off the front of results
+    port: int = 8188                # ComfyUI port inside its container
+    default_gpu: int = 0            # only without generated/services.json
 
     @property
     def output_prefix(self) -> str:
         """Start of the result's file name: Cy_Replace / Cy_Animate."""
-        return f"Cy_{self.name.capitalize()}"
+        return self.prefix or f"Cy_{self.name.capitalize()}"
 
     @property
     def all_nodes(self) -> list[str]:
@@ -78,27 +86,36 @@ class Adapter:
         return wf
 
 
-# ── Character replacement (SCAIL-2 + Flux2 Klein) ────────────────────────────
-# Stages: clean first frame -> pose retarget -> relight -> windowed SCAIL-2.
-# Node 335 emits the side-by-side (original | result) video with source audio.
-REPLACE = Adapter(
-    name="replace",
-    workflow_file="replace_workflow.json",
-    image_node="188",           # LoadImage        - reference character
-    video_node="384",           # VHS_LoadVideo    - driving video
-    output_node="335",          # VHS_VideoCombine - side-by-side + audio
-    frame_cap_node="384",
-)
+def load_catalog(path: Path = CATALOG_FILE) -> dict:
+    """The whole workflows.json, for callers that need more than the adapters."""
+    return json.loads(path.read_text())
 
-# ── WAN 2.2 Animate ──────────────────────────────────────────────────────────
-# Node ids mirror patch_workflow() in comfyui-wan-docker/gradio_app_gpu1.py.
-ANIMATE = Adapter(
-    name="animate",
-    workflow_file="animate_workflow.json",
-    image_node="311",           # LoadImage        - reference image
-    video_node="417",           # VHS_LoadVideo    - driving video
-    output_node="462",          # VHS_VideoCombine - result
-    frame_cap_node="417",
-)
 
-ADAPTERS = {a.name: a for a in (ANIMATE, REPLACE)}
+def _adapter(name: str, spec: dict) -> Adapter:
+    nodes = spec["nodes"]
+    return Adapter(
+        name=name,
+        workflow_file=spec["file"],
+        image_node=str(nodes["image"]),
+        video_node=str(nodes["video"]),
+        output_node=str(nodes["output"]),
+        frame_cap_node=str(nodes["frame_cap"]) if nodes.get("frame_cap") else None,
+        prefix=spec.get("prefix", ""),
+        label=spec.get("label") or name.capitalize(),
+        blurb=spec.get("blurb", ""),
+        gallery_blurb=spec.get("gallery_blurb", ""),
+        timeout=float(spec.get("timeout_hours", 2)) * 3600.0,
+        trim_frames=int(spec.get("trim_frames", 0)),
+        port=int(spec.get("port", 8188)),
+        default_gpu=int(spec.get("default_gpu", 0)),
+    )
+
+
+# Replace: SCAIL-2 + Flux2 Klein. Node 335 emits the side-by-side
+# (original | result) video with source audio.
+# Animate: WAN 2.2 Animate. Node ids mirror patch_workflow() in
+# comfyui-wan-docker/gradio_app_gpu1.py.
+# Kept in workflows.json order, which is also the tab order.
+ADAPTERS: dict[str, Adapter] = {
+    name: _adapter(name, spec) for name, spec in load_catalog()["workflows"].items()
+}

@@ -23,7 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.comfy_client import ComfyClient, ComfyError   # noqa: E402
 from app.workflows import ADAPTERS                     # noqa: E402
 
-DEFAULT_URL = {"replace": "http://127.0.0.1:8136", "animate": "http://127.0.0.1:8134"}
+# Each ComfyUI port from workflows/workflows.json, on this host. The compose file
+# does not publish them: uncomment `ports:` on the service, or pass --url.
+DEFAULT_URL = {name: f"http://127.0.0.1:{a.port}" for name, a in ADAPTERS.items()}
 
 
 def main():

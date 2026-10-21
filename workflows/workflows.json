@@ -1,0 +1,52 @@
+{
+  "_about": [
+    "Every workflow the UI offers. One entry = one tab.",
+    "To add a workflow: add an entry here, a service for it in docker-compose.yml",
+    "(named in compose_template), then run ./start.sh.",
+    "nodes: image = LoadImage of the reference, video = VHS_LoadVideo of the driving",
+    "video, output = VHS_VideoCombine of the final result, frame_cap = the node whose",
+    "frame_load_cap MAX_FRAMES overrides (staging only).",
+    "default_gpu is used only when generated/services.json is absent (plain",
+    "docker-compose.yml); start.sh assigns GPUs itself."
+  ],
+
+  "workflows": {
+    "replace": {
+      "label": "Replace character",
+      "blurb": "Puts the character from your image into the driving video, matching pose, framing and lighting. The result is shown side by side with the original, with the original audio. A full-length clip takes roughly an hour.",
+      "gallery_blurb": "Examples of character replacement: the result is your reference character in the driving video's scene.",
+      "file": "replace_workflow.json",
+      "nodes": {"image": "188", "video": "384", "output": "335", "frame_cap": "384"},
+      "prefix": "Cy_Replace",
+      "timeout_hours": 3,
+      "trim_frames": 10,
+      "compose_template": "comfy-replace",
+      "port": 8136,
+      "default_gpu": 0
+    },
+    "animate": {
+      "label": "Animate",
+      "blurb": "Animates the character in your image using the motion of the driving video.",
+      "gallery_blurb": "Examples of animation: the reference image performing the driving video's motion.",
+      "file": "animate_workflow.json",
+      "nodes": {"image": "311", "video": "417", "output": "462", "frame_cap": "417"},
+      "prefix": "Cy_Animate",
+      "timeout_hours": 2,
+      "trim_frames": 10,
+      "compose_template": "comfy-animate",
+      "port": 8134,
+      "default_gpu": 1
+    }
+  },
+
+  "_about_gpus": [
+    "How ./start.sh spreads workflows over the GPUs it finds:",
+    "  fewer GPUs than workflows -> workflows share GPUs (one queue per GPU)",
+    "  one GPU per workflow      -> each gets its own",
+    "  more GPUs than workflows  -> the spare GPUs get extra servers, in spare_gpus order",
+    "gpu_plan pins workflows to GPUs by hand instead, e.g. {\"replace\": [0, 1], \"animate\": [1]}.",
+    "GPUs in gpu_plan that the machine does not have are ignored."
+  ],
+  "spare_gpus": ["replace", "animate"],
+  "gpu_plan": null
+}
