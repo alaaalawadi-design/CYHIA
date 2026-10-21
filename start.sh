@@ -37,7 +37,11 @@ before=""
 python3 scripts/gen_config.py "$@"
 after=$(sha256sum < "$GEN/services.json")
 
-"${COMPOSE[@]}" up -d --remove-orphans
+# No --remove-orphans: containers this file does not list (an extra server
+# from a bigger GPU layout, or one from another branch) are left alone, and
+# docker compose just warns about them. Remove one yourself with
+#   docker rm -f <container>
+"${COMPOSE[@]}" up -d
 
 if [[ -n "$before" && "$before" != "$after" ]]; then
     echo "GPU layout changed: restarting the UI to pick it up"

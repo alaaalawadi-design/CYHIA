@@ -1,12 +1,15 @@
 # cy_hia
 
-One HTML UI over two ComfyUI backends, one GPU each. Both GPUs are 32 GB RTX 5090s.
+One HTML UI over ComfyUI backends on however many GPUs the machine has (32 GB RTX 5090s).
 
 | Service | GPU | ComfyUI port | Workflow | What it does |
 |---|---|---|---|---|
-| `comfy-replace` | **0** | 8136 | `workflows/replace_workflow.json` | SCAIL-2 character replacement |
-| `comfy-animate` | **1** | 8134 | `workflows/animate_workflow.json` | WAN 2.2 Animate |
-| `ui` | none | **7860** (the only published port) | — | both tabs |
+| `comfy-replace` | set by `start.sh` (0 in `docker-compose.yml`) | 8136 | `workflows/replace_workflow.json` | SCAIL-2 character replacement |
+| `comfy-animate` | set by `start.sh` (1 in `docker-compose.yml`) | 8134 | `workflows/animate_workflow.json` | WAN 2.2 Animate |
+| `ui` | none | **7860** (the only published port) | — | one tab per workflow |
+
+Since 2026-10-21 the machine has **one GPU** (GPU 1 dropped out), and `./start.sh` runs both
+backends on GPU 0 behind one shared queue. See "GPU layout and the shared queue" below.
 
 The backends run **ComfyUI only** — no UI inside them. That is the point of the split: the
 UI can be restarted without evicting ~15 GB of weights from either GPU.
@@ -72,12 +75,56 @@ Consequences to know about:
 - To go back to the self-contained image: restore the 7 individual `custom_nodes` mounts and drop
   the venv, `ops.py`, cuda-12.8 mounts and the `PATH`/`VIRTUAL_ENV`/`LD_LIBRARY_PATH` overrides.
 
+## GPU layout and the shared queue (2026-10-21, branch nouran/gpu-executors)
+
+Nothing about GPUs or workflows is fixed in the code any more:
+
+- `workflows/workflows.json` — every workflow (= tab): label, blurbs, node ids, output prefix,
+  `timeout_hours`, `trim_frames`, ComfyUI `port`, `compose_template` (the service in
+  `docker-compose.yml` it is copied from), `default_gpu`. Also `spare_gpus` and `gpu_plan`.
+- `./start.sh` → `scripts/gen_config.py` counts GPUs with `nvidia-smi`, places the workflows
+  (shared if fewer GPUs than workflows; one each; spare GPUs get extra servers in `spare_gpus`
+  order; or `gpu_plan` by hand) and writes `generated/services.json` + `generated/docker-compose.yml`.
+  The generated compose is `docker compose config` of the hand-written file with, per copy, only
+  the GPU (`device_ids` + `NVIDIA_VISIBLE_DEVICES`), container name and `data/<wf>-<n>/` folders
+  changed. Same project name (`cy_hia`) and network, so unchanged containers keep running.
+  `start.sh` deliberately does **not** pass `--remove-orphans`: `cyhia_comfy_replace2` (stopped,
+  from the `dual-replace-gpu1` branch) belongs to the same project and must not be deleted silently.
+- `app/server.py` reads `generated/services.json` (`SERVICES_FILE`); without it, it falls back to
+  one server per workflow at `default_gpu` / `http://comfy-<name>:<port>` (`<NAME>_URL`/`_GPU`
+  override), which is exactly the old layout, so the hand-written compose still works.
+
+Scheduler (`server.py`): one waiting list (`Job.seq` = submission order across all tabs and users),
+one worker thread per GPU (`_gpu_worker`), which takes the oldest queued job a live server on its
+GPU can run (`_pick`). Before running on a server other than the one that ran the GPU's previous
+job (or after a restart), `_make_room` POSTs ComfyUI's `/free` (`unload_models` + `free_memory`)
+to the other servers on that GPU and waits up to `FREE_VRAM_WAIT` (60 s) for `FREE_VRAM_SHARE`
+(85 %) of the card to be free, then starts anyway with a log line. `/free` never interrupts a
+running prompt, so a job submitted to ComfyUI directly (smoke.py, port 8136) can still collide.
+Server health is cached (`_health_loop`, every 10 s); a job whose workflow has no live server
+anywhere is failed rather than left blocking the queue, and a submit to such a tab gets a 503.
+
+Limits: `MAX_PER_USER = 5` per user per tab, `MAX_WAITING = 10` per tab for everyone, both at
+the top of `server.py`. The page reads the per-user limit from `/api/services`.
+
+Page: tabs and the History filter come from `/api/services`; each tab has a "Your jobs" list fed
+by one poll of `/api/jobs` (the caller's jobs, oldest first), so it survives reloads and other
+browsers; finished jobs are removed from it with `/api/jobs/{id}/dismiss`. Generate stays enabled
+while jobs run.
+
+Tested with fake ComfyUI servers (strict order on a shared GPU, parallel on two, two Replace
+servers, offline server, limit of 5, per-user isolation) and in headless Chromium.
+
 ## Layout
 
 ```
-app/comfy_client.py   ComfyClient — one instance per backend (upload, submit, ws progress, /history)
-app/workflows.py      Adapter per service: owns node ids, patches inputs and the output prefix
-app/server.py         FastAPI: in-memory jobs, one worker thread per backend, /api/*
+workflows/workflows.json  every workflow the UI offers (see above)
+start.sh              count GPUs, write generated/, start; --plan only prints the layout
+scripts/gen_config.py what start.sh runs; --gpus N to plan for another machine
+generated/            services.json + docker-compose.yml for this machine (gitignored)
+app/comfy_client.py   ComfyClient — one instance per backend (upload, submit, ws progress, /history, /free)
+app/workflows.py      Adapter per workflow, built from workflows.json: patches inputs and the output prefix
+app/server.py         FastAPI: in-memory jobs, one shared queue, one worker thread per GPU, /api/*
 app/static/index.html the whole front end — plain HTML/CSS/JS, no build step, no CDN
 scripts/harden_replace_workflow.py   src workflow -> service workflow (declarative + validated)
 scripts/gen_requirements.py          derives docker/requirements-lock.txt
@@ -91,7 +138,7 @@ assets/documentation/ stills and clips for the Documentation tab (gitignored), s
 
 ## Workflow node ids
 
-Both adapters in `app/workflows.py`. Never hardcode these elsewhere.
+Set in `workflows/workflows.json` (`nodes`), read by `app/workflows.py`. Never hardcode these elsewhere.
 
 | | replace | animate |
 |---|---|---|
@@ -172,9 +219,12 @@ Derive the list from ComfyUI itself rather than guessing, via `python_module` in
 ## Building and running
 
 ```bash
+./start.sh                                  # normal start: counts GPUs, see above
+./start.sh --plan [--gpus N]                # just print the layout
 docker compose build comfy-replace          # ~45 min, see note below
-docker compose up -d comfy-replace          # GPU 0
-docker compose up -d --remove-orphans      # + the UI on :7860 (service `ui`; was `gradio-ui`)
+docker compose up -d comfy-replace          # old fixed layout: GPU 0
+docker compose up -d                       # + the UI on :7860 (service `ui`; was `gradio-ui`)
+                                           # no --remove-orphans: it would delete cyhia_comfy_replace2
 docker compose --profile phase3 up -d comfy-animate   # GPU 1
 docker compose logs -f comfy-replace
 ```
@@ -245,9 +295,9 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
 ## Conventions
 
 - The UI is **not Gradio** (replaced 2026-09-29). `app/server.py` + `app/static/index.html`; the page
-  uploads with XHR, then polls `/api/jobs/{id}` every 2 s. The page keeps its job id in
-  `localStorage`, so a reload reconnects. Jobs are in memory: restarting the UI container forgets
-  them (ComfyUI still finishes, the output stays in that backend's `data/*/output`).
+  uploads with XHR, then polls `/api/jobs` (all of the user's jobs) every 2 s while any is active.
+  A reload reconnects because the list comes from the server. Jobs are in memory: restarting the UI
+  container forgets them (ComfyUI still finishes, the output stays in that backend's `data/*/output`).
 - **Accounts (added 2026-10-19):** `/login` (`static/login.html`) signs up / signs in; `/` and every
   `/api/*` route except `/api/auth/*` need a session cookie (`app/auth.py`, stdlib only: SQLite
   at `ui_outputs/users.db`, scrypt passwords, only token hashes stored). Each result is recorded
@@ -269,8 +319,8 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
   any fraction would be a lie.
 - The UI must start even when a backend is down (`condition: service_started`, not
   `service_healthy`), so one dead GPU service never takes the other tab offline.
-- One job at a time per backend (a single-worker executor each): one GPU each. At most 10
-  waiting per backend.
+- One job at a time per **GPU** (one worker thread each), from one shared list in submission
+  order. At most `MAX_PER_USER` (5) per user per tab and `MAX_WAITING` (10) per tab in all.
 - Results are fetched over `/view`, never through a shared filesystem, so the UI container needs no
   mounts from the backends.
 - Uploads get UUID filenames; the two backends have separate `input/` dirs.
@@ -299,12 +349,14 @@ UI timeouts are set from this: 3 h for replace, 2 h for animate. Do not lower th
   frame cap, timings); `disclaimers` is what the evaluation observed — a ~15 s stability window,
   the three animation resolutions, 2/66 segmentation and 1/66 relighting failures. Those are
   recommendations, not acceptance rules: do not turn them into upload validation.
-- **The first `TRIM_FRAMES` frames are cut off each result** (6 for both services, so 0.25 s at
-  the workflows' 24 fps) to drop warm-up frames, and the saved driving video is cut by the same
+- **The first `trim_frames` frames are cut off each result** (`workflows.json`; 10 for both
+  services, so ~0.42 s at the workflows' 24 fps) to drop warm-up frames, and the saved driving video is cut by the same
   **duration** — not the same frame count, since the upload's native rate is usually not 24.
   This needs `ffmpeg` and `ffprobe`, which `Dockerfile.ui` installs; without them the server logs
   a warning at startup and every job returns untrimmed. A trim failure never fails a job. Set
-  `TRIM_FRAMES` to 0 per service to turn it off.
+  `trim_frames` to 0 per workflow to turn it off. **As of 2026-10-21 the running `cyhia-ui:latest`
+  image has no ffmpeg** (built before the Dockerfile line was added), so nothing is trimmed until
+  `docker compose build ui` is run.
 
 ## State as of 2026-09-29
 
