@@ -200,6 +200,29 @@
   }
   .go:not(:disabled):hover { transform: translateY(-1px); background: var(--accent-hover); }
   .go:disabled { opacity: .5; cursor: not-allowed; }
+  .quota { margin: -4px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+  @media (max-width: 880px) { .side .quota { grid-column: 1 / -1; } }
+
+  /* ── this user's jobs in one tab: waiting, running and finished ───────────── */
+  .jobs { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); }
+  .jobs-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+  .jobs-head .count { font-weight: 400; color: var(--muted); }
+  .joblist { list-style: none; margin: 0; padding: 0; }
+  .job { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .job:first-child { border-top: 0; }
+  .job .jn { font-variant-numeric: tabular-nums; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .job .jt { min-width: 0; overflow-wrap: anywhere; }
+  .job .jt b { font-weight: 600; }
+  .job .jt .jm { color: var(--muted); }
+  .job.error .jt { color: var(--bad); }
+  .job .ja { display: flex; gap: 4px; }
+  .job .ja button { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); cursor: pointer; }
+  .job .ja button:hover { background: var(--panel-2); }
+  .job .ja button.x { color: var(--muted); padding: 3px 7px; }
+  .job.shown .ja button.view { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .job .bar { grid-column: 2 / -1; margin-top: 2px; height: 3px; }
+  .job .dot.running { background: var(--busy); } .job .dot.queued { background: var(--muted); }
+  .job .dot.done { background: var(--ok); } .job .dot.error { background: var(--bad); }
 
   .empty { color: var(--muted); min-height: 200px; display: flex; align-items: center; justify-content: center; text-align: center; }
   .progress { margin: 0 0 12px; font-size: 14px; }
@@ -308,9 +331,8 @@
     <p>Replace a character in a video, or animate a still image from a driving video.</p>
   </section>
 
-  <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="replace" aria-selected="true"><span class="dot" data-dot="replace"></span>Replace character</button>
-    <button role="tab" data-tab="animate" aria-selected="false"><span class="dot" data-dot="animate"></span>Animate</button>
+  <!-- One tab per workflow is added in front of History from /api/services. -->
+  <nav class="tabs" role="tablist" id="tabs">
     <button role="tab" data-tab="history" aria-selected="false">History</button>
     <button role="tab" data-tab="docs" aria-selected="false">Documentation</button>
   </nav>
@@ -343,8 +365,13 @@
             <button type="button" class="swap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="14" height="14" rx="3"/><path d="M16.5 10l5-3v10l-5-3z"/></svg><span>Choose video</span></button>
           </div>
           <button class="go" disabled>Generate</button>
+          <p class="quota" hidden></p>
         </aside>
         <div class="work">
+          <div class="jobs" hidden>
+            <div class="jobs-head"><span>Your jobs</span><span class="count"></span></div>
+            <ol class="joblist"></ol>
+          </div>
           <div class="jobbar" hidden>
             <div class="error" hidden></div>
             <div class="progress" hidden>
@@ -396,7 +423,7 @@
     <div class="hist-head">
       <h2>Previous runs</h2>
       <select id="hist-filter" aria-label="Filter by service">
-        <option value="">All services</option><option value="replace">Replace</option><option value="animate">Animate</option>
+        <option value="">All services</option>
       </select>
     </div>
     <p class="hist-sub">Your finished results, newest first. Only you can see them. Kept on disk, so they survive a restart.</p>
@@ -430,12 +457,11 @@
 <script>
 "use strict";
 
-const SERVICES = {
-  replace: "Puts the character from your image into the driving video, matching pose, " +
-           "framing and lighting. The result is shown side by side with the original, " +
-           "with the original audio. A full-length clip takes roughly an hour.",
-  animate: "Animates the character in your image using the motion of the driving video.",
-};
+// The workflows (one tab each) come from /api/services, which reads
+// workflows/workflows.json and generated/services.json. Filled in by init().
+let SERVICES = {};          // name -> { label, blurb, gallery_blurb, gpus, servers }
+let MAX_PER_USER = 0;       // copied from the server by init(); change it in app/server.py
+const PANELS = {};          // name -> panel element (with .update(jobs))
 
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -458,7 +484,8 @@ fetch("/api/auth/me").then(r => r.ok && r.json()).then(u => {
   document.getElementById("admin-link").hidden = !u.admin;
 }).catch(() => {});
 document.getElementById("logout").addEventListener("click", async () => {
-  // Job ids are per user: do not let the next person on this browser resume them.
+  // Jobs are fetched per user from the server, so nothing here can leak to the
+  // next person on this browser; only the old one-job-per-tab keys are cleared.
   for (const s of Object.keys(SERVICES)) store.set(`job:${s}`, null);
   try { await _fetch("/api/auth/logout", { method: "POST" }); } catch {}
   toLogin();
@@ -687,11 +714,11 @@ function drawRuler(el, duration) {
 function makePanel(service) {
   const el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
   el.dataset.panel = service;
-  el.querySelector(".blurb").textContent = SERVICES[service];
+  el.querySelector(".blurb").textContent = SERVICES[service].blurb || "";
   const $ = s => el.querySelector(s);
   const files = { image: null, video: null };
   const go = $(".go");
-  let busy = false, pollTimer = null;
+  let uploading = false, active = 0;   // active = this user's waiting + running jobs here
 
   // ── player: one <video> shows either the source upload or the result ───────
   const v = $(".screen video"), timeline = $(".timeline");
@@ -843,10 +870,18 @@ function makePanel(service) {
     });
   });
 
-  function refresh() { go.disabled = busy || !files.image || !files.video; }
+  // Generate stays usable while jobs run: each press queues one more job, up to
+  // MAX_PER_USER waiting or running in this tab (the server enforces the same).
+  function refresh() {
+    const full = active >= MAX_PER_USER;
+    go.disabled = uploading || full || !files.image || !files.video;
+    go.textContent = uploading ? "Uploading…" : full ? `Limit reached (${MAX_PER_USER} in progress)` : "Generate";
+    $(".quota").hidden = !active;
+    $(".quota").textContent = `${active} of ${MAX_PER_USER} in progress`;
+  }
 
-  // ── job status: error / progress strip above the player ───────────────────
-  function show({ error = null, stage = null, meta = "", fraction = null, result = null, filename: name = null }) {
+  // ── upload status: error / progress strip above the player ────────────────
+  function show({ error = null, stage = null, meta = "", fraction = null }) {
     $(".error").hidden = !error; $(".error").textContent = error || "";
     $(".progress").hidden = !stage;
     $(".jobbar").hidden = !error && !stage;
@@ -855,17 +890,14 @@ function makePanel(service) {
       $(".bar").classList.toggle("spin", fraction == null);
       $(".bar > i").style.width = fraction == null ? "" : `${Math.round(fraction * 100)}%`;
     }
-    if (result) { filename = name; setMedia("result", { src: result, size: 0 }); }
   }
 
-  function setBusy(b) { busy = b; go.textContent = b ? "Working…" : "Generate"; refresh(); }
-
-  // ── running a job ─────────────────────────────────────────────────────────
+  // ── submitting a job ──────────────────────────────────────────────────────
   go.addEventListener("click", () => {
     const fd = new FormData();
     fd.append("image", files.image);
     fd.append("video", files.video);
-    setBusy(true);
+    uploading = true; refresh();
     show({ stage: "Uploading", meta: "0%", fraction: 0 });
 
     // XHR rather than fetch: upload progress is the one honest fraction we have.
@@ -875,65 +907,118 @@ function makePanel(service) {
       if (e.lengthComputable) show({ stage: "Uploading", meta: `${Math.round(e.loaded / e.total * 100)}%`, fraction: e.loaded / e.total });
     };
     xhr.onload = () => {
+      uploading = false;
       if (xhr.status === 401) return toLogin();
       let body = {};
       try { body = JSON.parse(xhr.responseText); } catch {}
       if (xhr.status !== 200) {
-        setBusy(false);
+        refresh();
         show({ error: body.detail || `Upload failed (HTTP ${xhr.status}).` });
         return;
       }
-      store.set(`job:${service}`, body.id);
-      track(body.id);
+      show({});                      // the new job now appears in the list
+      active++; refresh();
+      pollJobs();
     };
-    xhr.onerror = () => { setBusy(false); show({ error: "Upload failed: the UI server could not be reached." }); };
+    xhr.onerror = () => { uploading = false; refresh(); show({ error: "Upload failed: the UI server could not be reached." }); };
     xhr.send(fd);
   });
 
-  function track(id) {
-    setBusy(true);
-    clearTimeout(pollTimer);
-    const poll = async () => {
-      let job;
-      try {
-        const r = await fetch(`/api/jobs/${id}`);
-        job = await r.json();
-        if (!r.ok) throw new Error(job.detail || `HTTP ${r.status}`);
-      } catch (e) {
-        if (String(e.message).startsWith("Unknown job")) {
-          store.set(`job:${service}`, null); setBusy(false);
-          show({ error: `Lost track of the job: ${e.message}` });
-          return;
-        }
-        pollTimer = setTimeout(poll, 5000);       // UI server blip: keep trying
-        return;
-      }
-      if (job.state === "done") {
-        store.set(`job:${service}`, null); setBusy(false);
-        show({ result: job.result, filename: job.filename });
-        return;
-      }
-      if (job.state === "error") {
-        store.set(`job:${service}`, null); setBusy(false);
-        show({ error: job.error });
-        return;
-      }
-      if (job.state === "queued") {
-        show({ stage: "Waiting for the GPU", meta: job.ahead ? `· ${job.ahead} job${job.ahead > 1 ? "s" : ""} ahead` : "" });
-      } else {
-        // Stage name + elapsed, not a percentage: see CLAUDE.md.
-        const step = job.steps ? ` · step ${job.step}/${job.steps}` : "";
-        show({ stage: job.stage, meta: `${step} · ${minutes(job.elapsed)} elapsed`,
-               fraction: job.steps ? job.step / job.steps : null });
-      }
-      pollTimer = setTimeout(poll, 2000);
-    };
-    poll();
+  // ── the job list: fed by pollJobs() with this user's jobs for this tab ────
+  const list = $(".joblist");
+  const seen = new Map();            // id -> state last time, to notice finishes
+  let shownId = null;
+
+  function showResult(job) {
+    shownId = job.id; filename = job.filename;
+    setMedia("result", { src: job.result, size: 0 });
+    list.querySelectorAll(".job").forEach(li => li.classList.toggle("shown", li.dataset.id === shownId));
   }
 
-  const resume = store.get(`job:${service}`);
-  if (resume) { show({ stage: "Reconnecting to your job", meta: "" }); track(resume); }
+  function describe(job) {
+    if (job.state === "queued") {
+      const ahead = job.ahead ? ` · ${job.ahead} job${job.ahead > 1 ? "s" : ""} ahead` : "";
+      return ["Waiting for the GPU", ahead];
+    }
+    if (job.state === "running") {
+      // Stage name + elapsed, not a percentage: see CLAUDE.md.
+      const step = job.steps ? ` · step ${job.step}/${job.steps}` : "";
+      return [job.stage, `${step} · ${minutes(job.elapsed)} elapsed`];
+    }
+    if (job.state === "done") return ["Done", ` · ${job.filename || ""} · took ${minutes(job.elapsed)}`];
+    return ["Failed", ` · ${job.error || "unknown error"}`];
+  }
+
+  el.update = jobs => {
+    active = jobs.filter(j => j.state === "queued" || j.state === "running").length;
+    refresh();
+    $(".jobs").hidden = !jobs.length;
+    $(".jobs .count").textContent = active ? `${active} in progress` : "";
+    list.replaceChildren();
+    let finishedNow = null;
+    jobs.forEach((job, i) => {
+      const before = seen.get(job.id);
+      if (job.state === "done" && before && before !== "done") finishedNow = job;
+      seen.set(job.id, job.state);
+
+      const li = document.createElement("li");
+      li.className = `job ${job.state}`; li.dataset.id = job.id;
+      if (job.id === shownId) li.classList.add("shown");
+      const n = document.createElement("span"); n.className = "jn";
+      const d = document.createElement("span"); d.className = `dot ${job.state}`;
+      n.append(d, `#${i + 1}`);
+      const [what, meta] = describe(job);
+      const t = document.createElement("span"); t.className = "jt";
+      const b = document.createElement("b"); b.textContent = what;
+      const m = document.createElement("span"); m.className = "jm"; m.textContent = meta;
+      t.append(b, m);
+      const a = document.createElement("span"); a.className = "ja";
+      if (job.state === "done" && job.result) {
+        const v = document.createElement("button"); v.type = "button"; v.className = "view"; v.textContent = "Show";
+        v.addEventListener("click", () => showResult(job));
+        a.append(v);
+      }
+      if (job.state === "done" || job.state === "error") {
+        const x = document.createElement("button"); x.type = "button"; x.className = "x";
+        x.textContent = "✕"; x.title = "Remove from this list (the result stays in History)";
+        x.setAttribute("aria-label", "Remove from list");
+        x.addEventListener("click", async () => {
+          try { await fetch(`/api/jobs/${job.id}/dismiss`, { method: "POST" }); } catch {}
+          pollJobs();
+        });
+        a.append(x);
+      }
+      li.append(n, t, a);
+      if (job.state === "running") {
+        const bar = document.createElement("div"); bar.className = "bar";
+        const fill = document.createElement("i"); bar.append(fill);
+        bar.classList.toggle("spin", !job.steps);
+        if (job.steps) fill.style.width = `${Math.round(job.step / job.steps * 100)}%`;
+        li.append(bar);
+      }
+      list.append(li);
+    });
+    // A job that finished while the page was open goes straight to the player.
+    if (finishedNow) showResult(finishedNow);
+  };
   return el;
+}
+
+// ── one poll for every tab's job list ───────────────────────────────────────
+// Every 2 s while anything is waiting or running, every 10 s otherwise.
+let jobsTimer = null;
+async function pollJobs() {
+  clearTimeout(jobsTimer);
+  let jobs = null;
+  try {
+    const r = await fetch("/api/jobs");
+    if (r.ok) jobs = await r.json();
+  } catch {}
+  if (jobs) {
+    for (const [name, panel] of Object.entries(PANELS)) panel.update(jobs.filter(j => j.service === name));
+  }
+  const busy = !jobs || jobs.some(j => j.state === "queued" || j.state === "running");
+  jobsTimer = setTimeout(pollJobs, busy ? 2000 : 10000);
 }
 
 // ── documentation ───────────────────────────────────────────────────────────
@@ -1216,7 +1301,6 @@ function buildDocs() {
 
 // ── tabs ────────────────────────────────────────────────────────────────────
 const panels = document.getElementById("panels");
-for (const s of Object.keys(SERVICES)) panels.append(makePanel(s));
 async function loadGallery(service) {
   const box = document.getElementById("gallery");
   let cases = [];
@@ -1224,9 +1308,7 @@ async function loadGallery(service) {
   box.hidden = !cases.length;
   const list = box.querySelector(".cases");
   list.replaceChildren();
-  box.querySelector(".gallery-sub").textContent = service === "replace"
-    ? "Examples of character replacement: the result is your reference character in the driving video's scene."
-    : "Examples of animation: the reference image performing the driving video's motion.";
+  box.querySelector(".gallery-sub").textContent = SERVICES[service]?.gallery_blurb || "";
   const fig = (label, tag, src, wide) => {
     if (!src) return null;
     const f = document.createElement("figure"), c = document.createElement("figcaption"), m = document.createElement(tag);
@@ -1307,10 +1389,6 @@ function selectTab(name) {
   else loadGallery(name);
   store.set("tab", name);
 }
-document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => selectTab(b.dataset.tab)));
-const TABS = [...Object.keys(SERVICES), "history", "docs"];
-selectTab(TABS.includes(store.get("tab")) ? store.get("tab") : "replace");
-
 // ── backend status ──────────────────────────────────────────────────────────
 // Polled so a tab shows as offline before anyone presses Generate.
 async function pollStatus() {
@@ -1320,14 +1398,46 @@ async function pollStatus() {
       document.querySelectorAll(`[data-dot="${name}"], [data-panel="${name}"] .status .dot`)
         .forEach(d => d.className = `dot ${s.state}`);
       const t = document.querySelector(`[data-panel="${name}"] .status-text`);
+      if (!t) continue;
       t.innerHTML = "";
       const b = document.createElement("b"); b.textContent = s.label;
       t.append(b, ` — ${s.detail}`);
     }
   } catch {}
-  setTimeout(pollStatus, 15000);
+  // Cheap: the server answers from its own health check, not from ComfyUI.
+  setTimeout(pollStatus, 5000);
 }
-pollStatus();
+
+// ── start-up: build one tab per workflow the server offers ──────────────────
+async function init() {
+  let cfg = null;
+  for (let tries = 0; !cfg; tries++) {
+    try { const r = await fetch("/api/services"); if (r.ok) cfg = await r.json(); } catch {}
+    if (!cfg) await new Promise(ok => setTimeout(ok, Math.min(10000, 1000 * (tries + 1))));
+  }
+  MAX_PER_USER = cfg.max_per_user;
+  const nav = document.getElementById("tabs"), histTab = nav.querySelector('[data-tab="history"]');
+  const filter = document.getElementById("hist-filter");
+  for (const s of cfg.services) {
+    SERVICES[s.name] = s;
+    const b = document.createElement("button");
+    b.setAttribute("role", "tab"); b.dataset.tab = s.name; b.setAttribute("aria-selected", "false");
+    const dot = document.createElement("span"); dot.className = "dot"; dot.dataset.dot = s.name;
+    b.append(dot, s.label);
+    nav.insertBefore(b, histTab);
+    panels.append(PANELS[s.name] = makePanel(s.name));
+  }
+  for (const s of [...cfg.services, ...(cfg.history_only || [])]) {
+    const o = document.createElement("option"); o.value = s.name; o.textContent = s.label; filter.append(o);
+  }
+  document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => selectTab(b.dataset.tab)));
+  const tabs = [...Object.keys(SERVICES), "history", "docs"];
+  selectTab(tabs.includes(store.get("tab")) ? store.get("tab") : tabs[0]);
+  for (const s of Object.keys(SERVICES)) store.set(`job:${s}`, null);   // pre-queue page's key
+  pollStatus();
+  pollJobs();
+}
+init();
 </script>
 </body>
 </html>
