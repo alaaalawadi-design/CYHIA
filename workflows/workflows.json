@@ -47,6 +47,6 @@
     "gpu_plan pins workflows to GPUs by hand instead, e.g. {\"replace\": [0, 1], \"animate\": [1]}.",
     "GPUs in gpu_plan that the machine does not have are ignored."
   ],
-  "spare_gpus": ["replace", "animate"],
+  "spare_gpus": ["replace"],
   "gpu_plan": null
 }

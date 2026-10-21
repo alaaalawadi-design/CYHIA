@@ -10,3 +10,5 @@ __pycache__/
 
 /assets/gallery
 /assets/documentation
+# Written by ./start.sh for this machine's GPUs (scripts/gen_config.py).
+/generated/
