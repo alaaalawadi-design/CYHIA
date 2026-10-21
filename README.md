@@ -105,7 +105,7 @@ server, each pinned to its GPU. Those containers are copies of the ones in the h
 |---|---|
 | 1 | replace and animate both on GPU 0, sharing one queue |
 | 2 | replace on GPU 0, animate on GPU 1, in parallel |
-| 3 or more | one each, then the spare GPUs get extra servers for the workflows in `spare_gpus` (replace by default) |
+| 3 or more | one each, then the spare GPUs take turns between the workflows in `spare_gpus`: GPU 2 → replace, GPU 3 → animate, GPU 4 → replace, … |
 
 To pin workflows by hand, set `gpu_plan` in `workflows/workflows.json`, for example
 `{"replace": [0, 1], "animate": [1]}`, then run `./start.sh` again. Run it again too whenever a GPU

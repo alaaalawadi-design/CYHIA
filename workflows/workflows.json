@@ -43,10 +43,11 @@
     "How ./start.sh spreads workflows over the GPUs it finds:",
     "  fewer GPUs than workflows -> workflows share GPUs (one queue per GPU)",
     "  one GPU per workflow      -> each gets its own",
-    "  more GPUs than workflows  -> the spare GPUs get extra servers, in spare_gpus order",
+    "  more GPUs than workflows  -> the spare GPUs get extra servers, cycling through spare_gpus",
+    "                               (replace, animate, replace, ...), so no workflow is left behind",
     "gpu_plan pins workflows to GPUs by hand instead, e.g. {\"replace\": [0, 1], \"animate\": [1]}.",
     "GPUs in gpu_plan that the machine does not have are ignored."
   ],
-  "spare_gpus": ["replace"],
+  "spare_gpus": ["replace", "animate"],
   "gpu_plan": null
 }

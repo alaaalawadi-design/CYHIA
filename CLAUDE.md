@@ -83,8 +83,8 @@ Nothing about GPUs or workflows is fixed in the code any more:
   `timeout_hours`, `trim_frames`, ComfyUI `port`, `compose_template` (the service in
   `docker-compose.yml` it is copied from), `default_gpu`. Also `spare_gpus` and `gpu_plan`.
 - `./start.sh` → `scripts/gen_config.py` counts GPUs with `nvidia-smi`, places the workflows
-  (shared if fewer GPUs than workflows; one each; spare GPUs get extra servers in `spare_gpus`
-  order; or `gpu_plan` by hand) and writes `generated/services.json` + `generated/docker-compose.yml`.
+  (shared if fewer GPUs than workflows; one each; spare GPUs cycle through `spare_gpus` —
+  replace, animate, replace, … — so neither workflow is starved; or `gpu_plan` by hand) and writes `generated/services.json` + `generated/docker-compose.yml`.
   The generated compose is `docker compose config` of the hand-written file with, per copy, only
   the GPU (`device_ids` + `NVIDIA_VISIBLE_DEVICES`), container name and `data/<wf>-<n>/` folders
   changed. Same project name (`cy_hia`) and network, so unchanged containers keep running.

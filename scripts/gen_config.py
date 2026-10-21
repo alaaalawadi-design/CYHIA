@@ -20,7 +20,7 @@ Run by ./start.sh. On its own:
 How GPUs are assigned (workflows/workflows.json can override with gpu_plan):
   fewer GPUs than workflows -> workflows share GPUs, round robin
   one GPU per workflow      -> each gets its own
-  more GPUs than workflows  -> spare GPUs get extra servers, in spare_gpus order
+  more GPUs than workflows  -> spare GPUs take turns: replace, animate, replace, ...
 """
 
 from __future__ import annotations
