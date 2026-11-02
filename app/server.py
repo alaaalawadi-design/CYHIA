@@ -16,7 +16,9 @@ server on its GPU can run. So:
     different GPU;
   - a workflow on several GPUs runs that many of its jobs at once.
 Before a job starts on a GPU that another server last used, that other server
-is told to unload its models, so the job gets the whole card.
+is told to unload its models, so the job gets the whole card. And after every
+job the server that ran it unloads its own models (free_after_run in
+workflows.json), so an idle GPU holds no weights.
 
 Jobs live in memory. A page reload resumes tracking (the page asks the server
 for the user's jobs), but restarting this server forgets them — ComfyUI keeps
@@ -79,8 +81,9 @@ MAX_PER_USER = 5
 MAX_WAITING = 10
 # Finished jobs kept for the status endpoint; their output files are not deleted.
 KEEP_FINISHED = 200
-# Before a job starts on a GPU another server used last, wait (up to this many
-# seconds) for that server to give its memory back.
+# After a server is told to unload (before a job starts on a GPU another server
+# used last, and after every job), wait up to this many seconds for the memory
+# to come back...
 FREE_VRAM_WAIT = 60.0
 # ...until at least this share of the card is free.
 FREE_VRAM_SHARE = 0.85
@@ -257,6 +260,25 @@ def _pick(gpu: int) -> tuple[Job, Backend] | None:
     return None
 
 
+def _wait_for_vram(backend: Backend) -> tuple[bool, tuple[int, int] | None]:
+    """Wait up to FREE_VRAM_WAIT for FREE_VRAM_SHARE of `backend`'s GPU to be free.
+    Returns (reached, last reading); the reading is None if it cannot tell."""
+    deadline = time.time() + FREE_VRAM_WAIT
+    while True:
+        v = backend.client.vram()
+        if v is None:
+            return False, None
+        if v[0] >= FREE_VRAM_SHARE * v[1]:
+            return True, v
+        if time.time() >= deadline:
+            return False, v
+        time.sleep(2)
+
+
+def _gib(v: tuple[int, int]) -> str:
+    return f"{v[0] / 2**30:.1f} of {v[1] / 2**30:.1f} GiB free"
+
+
 def _make_room(gpu: int, backend: Backend, job: Job) -> None:
     """Have every other server on this GPU unload its models before `job` runs."""
     others = [b for b in GPUS[gpu] if b is not backend]
@@ -265,19 +287,39 @@ def _make_room(gpu: int, backend: Backend, job: Job) -> None:
     job.stage = "Freeing GPU memory"
     for b in others:
         b.client.free()
-    deadline = time.time() + FREE_VRAM_WAIT
-    while time.time() < deadline:
-        v = backend.client.vram()
-        if v is None or v[0] >= FREE_VRAM_SHARE * v[1]:
-            return
-        time.sleep(2)
-    v = backend.client.vram()
-    print(
-        f"GPU {gpu}: only {v[0] / 2**30:.1f} of {v[1] / 2**30:.1f} GiB free after "
-        f"{FREE_VRAM_WAIT:.0f}s; starting {job.service} job {job.id} anyway"
-        if v
-        else f"GPU {gpu}: cannot read free memory; starting job {job.id} anyway"
-    )
+    ok, v = _wait_for_vram(backend)
+    if not ok:
+        print(
+            f"GPU {gpu}: only {_gib(v)} after {FREE_VRAM_WAIT:.0f}s; "
+            f"starting {job.service} job {job.id} anyway"
+            if v
+            else f"GPU {gpu}: cannot read free memory; starting job {job.id} anyway"
+        )
+
+
+def _release(gpu: int, backend: Backend, job: Job) -> None:
+    """
+    After `job`, have the server that ran it unload its models and drop its
+    caches, so the GPU sits empty until the next job. Runs on the GPU worker,
+    after the job is already marked done, so it never delays a result. A
+    timed-out job may still be running inside ComfyUI; /free then waits for it.
+    """
+    before = backend.client.vram()
+    if not backend.client.free():
+        print(f"GPU {gpu}: {backend.name} did not accept /free after job {job.id}")
+        return
+    ok, v = _wait_for_vram(backend)
+    if ok and before and v:
+        print(
+            f"GPU {gpu}: {backend.name} released "
+            f"{(v[0] - before[0]) / 2**30:.1f} GiB after job {job.id}; {_gib(v)}"
+        )
+    elif v:
+        # The reading is for the whole card, so it may be another server holding it.
+        print(
+            f"GPU {gpu}: only {_gib(v)} {FREE_VRAM_WAIT:.0f}s after "
+            f"{backend.name} was told to unload (job {job.id})"
+        )
 
 
 def _gpu_worker(gpu: int) -> None:
@@ -299,6 +341,8 @@ def _gpu_worker(gpu: int) -> None:
                 _make_room(gpu, backend, job)
             last = backend.name
             _execute(job, backend)
+            if ADAPTERS[job.service].free_after_run:
+                _release(gpu, backend, job)
         except Exception:  # noqa: BLE001 - a worker must never die
             traceback.print_exc()
             time.sleep(1)

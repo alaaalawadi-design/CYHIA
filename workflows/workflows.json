@@ -7,7 +7,10 @@
     "video, output = VHS_VideoCombine of the final result, frame_cap = the node whose",
     "frame_load_cap MAX_FRAMES overrides (staging only).",
     "default_gpu is used only when generated/services.json is absent (plain",
-    "docker-compose.yml); start.sh assigns GPUs itself."
+    "docker-compose.yml); start.sh assigns GPUs itself.",
+    "free_after_run (default true): after every job, tell that ComfyUI to unload its",
+    "models and drop its caches, so an idle GPU holds no weights. Costs a model reload",
+    "at the start of the next job."
   ],
 
   "workflows": {
@@ -20,6 +23,7 @@
       "prefix": "Cy_Replace",
       "timeout_hours": 3,
       "trim_frames": 10,
+      "free_after_run": true,
       "compose_template": "comfy-replace",
       "port": 8136,
       "default_gpu": 0
@@ -33,6 +37,7 @@
       "prefix": "Cy_Animate",
       "timeout_hours": 2,
       "trim_frames": 10,
+      "free_after_run": true,
       "compose_template": "comfy-animate",
       "port": 8134,
       "default_gpu": 1

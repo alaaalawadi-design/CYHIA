@@ -41,6 +41,7 @@ class Adapter:
     gallery_blurb: str = ""
     timeout: float = 2 * 3600.0     # seconds a job may run before it is abandoned
     trim_frames: int = 0            # warm-up frames cut off the front of results
+    free_after_run: bool = True     # unload the models from VRAM after every job
     port: int = 8188                # ComfyUI port inside its container
     default_gpu: int = 0            # only without generated/services.json
 
@@ -106,6 +107,7 @@ def _adapter(name: str, spec: dict) -> Adapter:
         gallery_blurb=spec.get("gallery_blurb", ""),
         timeout=float(spec.get("timeout_hours", 2)) * 3600.0,
         trim_frames=int(spec.get("trim_frames", 0)),
+        free_after_run=bool(spec.get("free_after_run", True)),
         port=int(spec.get("port", 8188)),
         default_gpu=int(spec.get("default_gpu", 0)),
     )

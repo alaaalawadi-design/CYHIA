@@ -101,6 +101,17 @@ job (or after a restart), `_make_room` POSTs ComfyUI's `/free` (`unload_models` 
 to the other servers on that GPU and waits up to `FREE_VRAM_WAIT` (60 s) for `FREE_VRAM_SHARE`
 (85 %) of the card to be free, then starts anyway with a log line. `/free` never interrupts a
 running prompt, so a job submitted to ComfyUI directly (smoke.py, port 8136) can still collide.
+
+**VRAM is released after every job (2026-11-02).** With `free_after_run` (per workflow in
+`workflows.json`, default true) the GPU worker calls `_release` after each job, done or failed:
+`/free` on the server that just ran it, then the same wait, logging how many GiB came back. It
+runs after the job is marked done, so it never delays a result; the next job on that GPU waits
+for it. Measured: an idle animate server went from 11.3 GB to 0.8 GB, and replace sits at 0.5 GB
+after a `/free` (what remains is the CUDA context). So custom nodes do not hold weights
+outside ComfyUI's model manager, and `--disable-smart-memory` or restarting containers is not
+needed. The cost is a model reload at the start of every job (not yet timed). `_make_room` stays as
+the safety net for UI restarts and jobs sent to ComfyUI directly.
+
 Server health is cached (`_health_loop`, every 10 s); a job whose workflow has no live server
 anywhere is failed rather than left blocking the queue, and a submit to such a tab gets a 503.
 
