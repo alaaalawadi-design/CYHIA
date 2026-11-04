@@ -1,0 +1,604 @@
+{
+  "1241": {
+    "inputs": {
+      "frame_rate": [
+        "5064",
+        5
+      ],
+      "positive": [
+        "2483",
+        0
+      ],
+      "negative": [
+        "2612",
+        0
+      ]
+    },
+    "class_type": "LTXVConditioning",
+    "_meta": {
+      "title": "LTXVConditioning",
+      "cnr_id": "comfy-core",
+      "ver": "0.3.28"
+    }
+  },
+  "2483": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "5128",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)",
+      "cnr_id": "comfy-core",
+      "ver": "0.3.28"
+    }
+  },
+  "2612": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "5128",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)",
+      "cnr_id": "comfy-core",
+      "ver": "0.3.28"
+    }
+  },
+  "3159": {
+    "inputs": {
+      "strength": 1,
+      "bypass": true,
+      "vae": [
+        "5127",
+        0
+      ],
+      "image": [
+        "5085",
+        0
+      ],
+      "latent": [
+        "5139",
+        0
+      ]
+    },
+    "class_type": "LTXVImgToVideoConditionOnly",
+    "_meta": {
+      "title": "🅛🅣🅧 LTXV Img To Video Condition Only",
+      "cnr_id": "ComfyUI-LTXVideo",
+      "aux_id": "Lightricks/ComfyUI-LTXVideo",
+      "ver": "82bd963cdeb66d023bed8c99324a307020907ef8"
+    }
+  },
+  "3980": {
+    "inputs": {
+      "frames_number": [
+        "5060",
+        1
+      ],
+      "frame_rate": [
+        "5024",
+        0
+      ],
+      "batch_size": 1,
+      "audio_vae": [
+        "5115",
+        0
+      ]
+    },
+    "class_type": "LTXVEmptyLatentAudio",
+    "_meta": {
+      "title": "Empty LTXV Latent Audio",
+      "cnr_id": "comfy-core",
+      "ver": "0.3.64"
+    }
+  },
+  "4528": {
+    "inputs": {
+      "video_latent": [
+        "5012",
+        2
+      ],
+      "audio_latent": [
+        "3980",
+        0
+      ]
+    },
+    "class_type": "LTXVConcatAVLatent",
+    "_meta": {
+      "title": "Concat AV Latent",
+      "cnr_id": "comfy-core",
+      "ver": "0.10.0"
+    }
+  },
+  "4828": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "5132",
+        0
+      ],
+      "positive": [
+        "5012",
+        0
+      ],
+      "negative": [
+        "5012",
+        1
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "CFG Guider",
+      "cnr_id": "comfy-core",
+      "ver": "0.14.1"
+    }
+  },
+  "4829": {
+    "inputs": {
+      "noise": [
+        "4832",
+        0
+      ],
+      "guider": [
+        "4828",
+        0
+      ],
+      "sampler": [
+        "4831",
+        0
+      ],
+      "sigmas": [
+        "5025",
+        0
+      ],
+      "latent_image": [
+        "4528",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced",
+      "cnr_id": "comfy-core",
+      "ver": "0.14.1"
+    }
+  },
+  "4831": {
+    "inputs": {
+      "sampler_name": "lcm"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect",
+      "cnr_id": "comfy-core",
+      "ver": "0.14.1"
+    }
+  },
+  "4832": {
+    "inputs": {
+      "noise_seed": 1123584371898876
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise",
+      "cnr_id": "comfy-core",
+      "ver": "0.14.1"
+    }
+  },
+  "4845": {
+    "inputs": {
+      "av_latent": [
+        "4829",
+        0
+      ]
+    },
+    "class_type": "LTXVSeparateAVLatent",
+    "_meta": {
+      "title": "Separate AV Latent",
+      "cnr_id": "comfy-core",
+      "ver": "0.10.0"
+    }
+  },
+  "4848": {
+    "inputs": {
+      "samples": [
+        "4845",
+        1
+      ],
+      "audio_vae": [
+        "5115",
+        0
+      ]
+    },
+    "class_type": "LTXVAudioVAEDecode",
+    "_meta": {
+      "title": "LTXV Audio VAE Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.3.64"
+    }
+  },
+  "4922": {
+    "inputs": {
+      "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "5117",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA",
+      "cnr_id": "comfy-core",
+      "ver": "0.14.1"
+    }
+  },
+  "5012": {
+    "inputs": {
+      "frame_idx": 0,
+      "strength": 1,
+      "latent_downscale_factor": 1,
+      "crop": "disabled",
+      "use_tiled_encode": false,
+      "tile_size": 512,
+      "tile_overlap": 128,
+      "use_streaming": false,
+      "tile_frames": 97,
+      "positive": [
+        "1241",
+        0
+      ],
+      "negative": [
+        "1241",
+        1
+      ],
+      "vae": [
+        "5127",
+        0
+      ],
+      "latent": [
+        "3159",
+        0
+      ],
+      "image": [
+        "5085",
+        0
+      ]
+    },
+    "class_type": "LTXAddVideoICLoRAGuide",
+    "_meta": {
+      "title": "🅛🅣🅧 Add Video IC-LoRA Guide",
+      "cnr_id": "ComfyUI-LTXVideo",
+      "aux_id": "Lightricks/ComfyUI-LTXVideo",
+      "ver": "82bd963cdeb66d023bed8c99324a307020907ef8"
+    }
+  },
+  "5013": {
+    "inputs": {
+      "positive": [
+        "5012",
+        0
+      ],
+      "negative": [
+        "5012",
+        1
+      ],
+      "latent": [
+        "4845",
+        0
+      ]
+    },
+    "class_type": "LTXVCropGuides",
+    "_meta": {
+      "title": "LTXVCropGuides",
+      "cnr_id": "comfy-core",
+      "ver": "0.3.75"
+    }
+  },
+  "5024": {
+    "inputs": {
+      "a": [
+        "5064",
+        5
+      ]
+    },
+    "class_type": "CM_FloatToInt",
+    "_meta": {
+      "title": "FloatToInt",
+      "cnr_id": "ComfyMath",
+      "aux_id": "evanspearman/ComfyMath",
+      "ver": "c01177221c31b8e5fbc062778fc8254aeb541638"
+    }
+  },
+  "5025": {
+    "inputs": {
+      "sigmas": "1.0, 0.95, 0.909375, 0.725, 0.421875, 0.2, 0.0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "ManualSigmas",
+      "cnr_id": "comfy-core",
+      "ver": "0.14.1"
+    }
+  },
+  "5026": {
+    "inputs": {
+      "resize_type": "scale shorter dimension",
+      "resize_type.shorter_size": 640,
+      "scale_method": "lanczos",
+      "input": [
+        "5060",
+        0
+      ]
+    },
+    "class_type": "ResizeImageMaskNode",
+    "_meta": {
+      "title": "Resize Image/Mask",
+      "cnr_id": "comfy-core",
+      "ver": "0.16.0"
+    }
+  },
+  "5060": {
+    "inputs": {
+      "video": "long_demo.mp4",
+      "force_rate": 30,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "LTXV",
+      "meta_batch": [
+        "5136",
+        0
+      ]
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Video (Upload) 🎥🅥🅗🅢",
+      "cnr_id": "comfyui-videohelpersuite",
+      "aux_id": "Kosinkadink/ComfyUI-VideoHelperSuite",
+      "ver": "1.7.9"
+    }
+  },
+  "5064": {
+    "inputs": {
+      "video_info": [
+        "5060",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢",
+      "cnr_id": "comfyui-videohelpersuite",
+      "aux_id": "Kosinkadink/ComfyUI-VideoHelperSuite",
+      "ver": "1.7.9"
+    }
+  },
+  "5085": {
+    "inputs": {
+      "resize_type": "scale to multiple",
+      "resize_type.multiple": 64,
+      "scale_method": "area",
+      "input": [
+        "5026",
+        0
+      ]
+    },
+    "class_type": "ResizeImageMaskNode",
+    "_meta": {
+      "title": "Resize Image/Mask",
+      "cnr_id": "comfy-core",
+      "ver": "0.18.1"
+    }
+  },
+  "5115": {
+    "inputs": {
+      "vae_name": "ltx-2.5-audio-vae-bf16.safetensors",
+      "device": "main_device",
+      "weight_dtype": "bf16"
+    },
+    "class_type": "VAELoaderKJ",
+    "_meta": {
+      "title": "VAELoader KJ",
+      "cnr_id": "comfyui-kjnodes",
+      "aux_id": "kijai/ComfyUI-KJNodes",
+      "ver": "9086a8dfb6657937b8fc0501aad6b903244bd2a7"
+    }
+  },
+  "5117": {
+    "inputs": {
+      "sage_attention": "auto",
+      "allow_compile": false,
+      "model": [
+        "5141",
+        0
+      ]
+    },
+    "class_type": "PathchSageAttentionKJ",
+    "_meta": {
+      "title": "Patch Sage Attention KJ",
+      "cnr_id": "comfyui-kjnodes",
+      "aux_id": "kijai/ComfyUI-KJNodes",
+      "ver": "1.3.7"
+    }
+  },
+  "5119": {
+    "inputs": {
+      "spatial_tiles": 1,
+      "spatial_overlap": 2,
+      "temporal_tile_length": 16,
+      "temporal_overlap": 4,
+      "last_frame_fix": false,
+      "working_device": "auto",
+      "working_dtype": "auto",
+      "vae": [
+        "5127",
+        0
+      ],
+      "latents": [
+        "5013",
+        2
+      ]
+    },
+    "class_type": "LTXVSpatioTemporalTiledVAEDecode",
+    "_meta": {
+      "title": "🅛🅣🅧 LTXV Spatio Temporal Tiled VAE Decode",
+      "cnr_id": "ComfyUI-LTXVideo",
+      "aux_id": "Lightricks/ComfyUI-LTXVideo",
+      "ver": "220e1d45aa0469f518e982102fca4dca92a61862"
+    }
+  },
+  "5120": {
+    "inputs": {
+      "lora_name": "ltx2.5-CQ-enhancer-lora-for-videos-rank128.safetensors",
+      "strength_model": 0.7,
+      "model": [
+        "4922",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA",
+      "cnr_id": "comfy-core",
+      "ver": "0.14.1"
+    }
+  },
+  "5127": {
+    "inputs": {
+      "vae_name": "ltx-2.5-video-vae-conv-bf16.safetensors",
+      "device": "main_device",
+      "weight_dtype": "bf16"
+    },
+    "class_type": "VAELoaderKJ",
+    "_meta": {
+      "title": "VAELoader KJ",
+      "cnr_id": "comfyui-kjnodes",
+      "aux_id": "kijai/ComfyUI-KJNodes",
+      "ver": "9086a8dfb6657937b8fc0501aad6b903244bd2a7"
+    }
+  },
+  "5128": {
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP",
+      "cnr_id": "comfy-core",
+      "ver": "0.29.0"
+    }
+  },
+  "5132": {
+    "inputs": {
+      "context_length": 153,
+      "context_overlap": 16,
+      "context_schedule": "standard_uniform",
+      "context_stride": 1,
+      "closed_loop": false,
+      "fuse_method": "pyramid",
+      "freenoise": true,
+      "retain_first_frame": false,
+      "split_conds_to_windows": false,
+      "model": [
+        "5120",
+        0
+      ]
+    },
+    "class_type": "LTXVContextWindows",
+    "_meta": {
+      "title": "LTXV Context Windows",
+      "cnr_id": "comfy-core",
+      "ver": "0.37.0"
+    }
+  },
+  "5136": {
+    "inputs": {
+      "frames_per_batch": 897,
+      "count": 11
+    },
+    "class_type": "VHS_BatchManager",
+    "_meta": {
+      "title": "Meta Batch Manager (frames per pass)",
+      "cnr_id": "comfyui-videohelpersuite",
+      "aux_id": "Kosinkadink/ComfyUI-VideoHelperSuite",
+      "ver": "4d907bee61e92c2e65af3bd6383a4e4d356126d1"
+    }
+  },
+  "5139": {
+    "inputs": {
+      "pixels": [
+        "5085",
+        0
+      ],
+      "vae": [
+        "5127",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Encode source as canvas (SDEdit start)",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  },
+  "5140": {
+    "inputs": {
+      "frame_rate": [
+        "5064",
+        5
+      ],
+      "loop_count": 0,
+      "filename_prefix": "Nk_Restoration",
+      "format": "video/nvenc_h264-mp4",
+      "pix_fmt": "yuv420p",
+      "bitrate": 10,
+      "megabit": true,
+      "save_metadata": true,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "5119",
+        0
+      ],
+      "audio": [
+        "5060",
+        2
+      ],
+      "meta_batch": [
+        "5136",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢",
+      "cnr_id": "comfyui-videohelpersuite",
+      "ver": "4d907bee61e92c2e65af3bd6383a4e4d356126d1"
+    }
+  },
+  "5141": {
+    "inputs": {
+      "unet_name": "ltx-2.5-22b-dev-transformer-comfy-int8-convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model",
+      "cnr_id": "comfy-core",
+      "ver": "0.42.0"
+    }
+  }
+}

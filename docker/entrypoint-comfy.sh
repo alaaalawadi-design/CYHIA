@@ -29,7 +29,7 @@ for path in "$COMFY_DIR/main.py" "$COMFY_DIR/models" "$COMFY_DIR/custom_nodes"; 
 done
 
 # Written into by ComfyUI at run time, so they must not be read-only mounts.
-mkdir -p "$COMFY_DIR/input" "$COMFY_DIR/output" "$COMFY_DIR/temp"
+mkdir -p "$COMFY_DIR/input" "$COMFY_DIR/output" "$COMFY_DIR/temp" 2>/dev/null || true  # read-only core (restore): dirs come from EXTRA_ARGS
 
 args=(
     --listen 0.0.0.0

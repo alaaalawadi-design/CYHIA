@@ -32,7 +32,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--service", choices=sorted(ADAPTERS), required=True)
     ap.add_argument("--url", default=None)
-    ap.add_argument("--image", required=True)
+    ap.add_argument("--image", default=None, help="reference image (not used by video-only workflows such as restore)")
     ap.add_argument("--video", required=True)
     ap.add_argument("--frames", type=int, default=49,
                     help="frame_load_cap; 4n+1 keeps the latent aligned")
@@ -72,7 +72,7 @@ def main():
         print("check-only: backend resolves every node class")
         return 0
 
-    image_name = client.upload(args.image)
+    image_name = client.upload(args.image) if adapter.needs_image else None
     video_name = client.upload(args.video)
     print(f"uploaded  image -> {image_name}\n          video -> {video_name}")
 

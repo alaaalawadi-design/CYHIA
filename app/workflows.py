@@ -31,7 +31,7 @@ class Adapter:
 
     name: str                       # key in workflows.json: "replace", "animate", ...
     workflow_file: str              # JSON file inside cy_hia/workflows/
-    image_node: str                 # LoadImage node: the reference character
+    image_node: str | None          # LoadImage node: the reference character (None = video-only workflow)
     video_node: str                 # VHS_LoadVideo node: the driving video
     output_node: str                # VHS_VideoCombine node: the final result
     frame_cap_node: str | None = None    # node that limits frames
@@ -51,8 +51,12 @@ class Adapter:
         return self.prefix or f"Cy_{self.name.capitalize()}"
 
     @property
+    def needs_image(self) -> bool:
+        return bool(self.image_node)
+
+    @property
     def all_nodes(self) -> list[str]:
-        base = [self.image_node, self.video_node, self.output_node]
+        base = [self.image_node, self.video_node, self.output_node]  # image_node may be None
         return [n for n in base if n]
 
     def load(self) -> dict:
@@ -64,7 +68,7 @@ class Adapter:
             raise KeyError(f"{self.name}: {path.name} is missing node(s) {missing}")
         return wf
 
-    def build(self, image_name: str, video_name: str, *,
+    def build(self, image_name: str | None, video_name: str, *,
               frame_cap: int | None = None) -> dict:
         """
         image_name / video_name are names already uploaded to that ComfyUI.
@@ -74,7 +78,8 @@ class Adapter:
         wf = workflow_settings.apply(self.name, self.load())
 
         # 1. inputs: point the workflow at the files we just uploaded
-        wf[self.image_node]["inputs"]["image"] = image_name
+        if self.image_node:
+            wf[self.image_node]["inputs"]["image"] = image_name
         wf[self.video_node]["inputs"]["video"] = video_name
 
         # 2. optional length cap (only used on a staging deployment)
@@ -97,7 +102,7 @@ def _adapter(name: str, spec: dict) -> Adapter:
     return Adapter(
         name=name,
         workflow_file=spec["file"],
-        image_node=str(nodes["image"]),
+        image_node=str(nodes["image"]) if nodes.get("image") else None,
         video_node=str(nodes["video"]),
         output_node=str(nodes["output"]),
         frame_cap_node=str(nodes["frame_cap"]) if nodes.get("frame_cap") else None,

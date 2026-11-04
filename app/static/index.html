@@ -575,6 +575,20 @@ const GUIDE = {
       ["Initial pose", "A mismatched starting pose can still give a good result, but it is the setup most likely to cause large hallucination."]],
     tip: "The output is the character from your image performing the video's motion; the video's background is not carried over. Use a clear portrait reference and a driving video that begins in a matching pose with simple motion, and keep gestures away from the hair.",
   },
+  restore: {
+    vidDo: ["Footage that is soft, noisy, compressed or low resolution and needs cleaning up",
+            "Steady, continuous shots; split clips with hard cuts into separate uploads",
+            "Audio you want kept: the original track is carried into the result"],
+    vidAvoid: ["Footage that is already sharp: restoration can over-process it",
+               "Extremely long clips: processing time grows with length"],
+    limits: [["Video", "MP4, MOV, WebM, MKV, AVI or M4V"],
+             ["Reference image", "Not needed: video only"],
+             ["Frame rate", "Resampled to 30 fps"],
+             ["Output", "H.264 MP4 with the original audio"]],
+    disclaimers: [
+      ["Evaluation", "No formal evaluation has been written up for restoration yet; treat the first results as exploratory."]],
+    tip: "Upload only the video you want restored. The result keeps its audio and is restored at a short side of 640 px, rounded to a multiple of 64.",
+  },
 };
 
 // Built once per place it is shown: the two service panels and the Documentation tab.
@@ -593,8 +607,8 @@ function guideCols(service) {
     for (const t of items) { const li = document.createElement("li"); li.textContent = t; ul.append(li); }
     return ul;
   };
-  col("Reference image", list("do", g.imgDo), list("avoid", g.imgAvoid, true));
-  col("Driving video", list("do", g.vidDo), list("avoid", g.vidAvoid, true));
+  if (g.imgDo) col("Reference image", list("do", g.imgDo), list("avoid", g.imgAvoid, true));
+  col(g.imgDo ? "Driving video" : "Source video", list("do", g.vidDo), list("avoid", g.vidAvoid, true));
 
   const table = document.createElement("table");
   table.className = "limits";
@@ -717,6 +731,8 @@ function makePanel(service) {
   el.querySelector(".blurb").textContent = SERVICES[service].blurb || "";
   const $ = s => el.querySelector(s);
   const files = { image: null, video: null };
+  const needsImage = SERVICES[service].needs_image !== false;
+  if (!needsImage) $('.asset[data-kind="image"]').hidden = true;
   const go = $(".go");
   let uploading = false, active = 0;   // active = this user's waiting + running jobs here
 
@@ -874,7 +890,7 @@ function makePanel(service) {
   // MAX_PER_USER waiting or running in this tab (the server enforces the same).
   function refresh() {
     const full = active >= MAX_PER_USER;
-    go.disabled = uploading || full || !files.image || !files.video;
+    go.disabled = uploading || full || (needsImage && !files.image) || !files.video;
     go.textContent = uploading ? "Uploading…" : full ? `Limit reached (${MAX_PER_USER} in progress)` : "Generate";
     $(".quota").hidden = !active;
     $(".quota").textContent = `${active} of ${MAX_PER_USER} in progress`;
@@ -895,7 +911,7 @@ function makePanel(service) {
   // ── submitting a job ──────────────────────────────────────────────────────
   go.addEventListener("click", () => {
     const fd = new FormData();
-    fd.append("image", files.image);
+    if (needsImage) fd.append("image", files.image);
     fd.append("video", files.video);
     uploading = true; refresh();
     show({ stage: "Uploading", meta: "0%", fraction: 0 });
@@ -1080,7 +1096,7 @@ const DOCS = [
     lead: "The same criteria shown on the Replace and Animate tabs, side by side. ✓ marks recommendations, " +
           "✕ marks inputs to avoid. “Limits” is what the pipeline enforces; “Limitations & disclaimers” is " +
           "what the evaluation observed.",
-    guides: ["replace", "animate"] },
+    guides: ["replace", "animate", "restore"] },
 
   { id: "doc-replace-strengths", kicker: "Replacement", title: "Strengths", nav: "Replacement strengths",
     lead: "Portrait-oriented and half-body content produces effective character transfer, with strong " +
@@ -1287,7 +1303,7 @@ function buildDocs() {
         const d = document.createElement("details"); d.className = "guide"; d.open = true;
         d.style.marginTop = "16px";
         const sum = document.createElement("summary");
-        sum.textContent = service === "replace" ? "Replacement — input guide" : "Animation — input guide";
+        sum.textContent = ({ replace: "Replacement — input guide", animate: "Animation — input guide", restore: "Restoration — input guide" })[service] || `${service} — input guide`;
         const wrap = document.createElement("div"); wrap.append(guideCols(service));
         const tip = document.createElement("p"); tip.className = "tip"; tip.textContent = GUIDE[service].tip;
         d.append(sum, wrap, tip); el.append(d);

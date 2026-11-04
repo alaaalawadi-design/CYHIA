@@ -41,8 +41,23 @@
       "compose_template": "comfy-animate",
       "port": 8134,
       "default_gpu": 1
+    },
+    "restore": {
+      "label": "Restore video",
+      "blurb": "Restores and sharpens a low-quality video (LTX 2.5). Upload a video only; no reference image is needed. The result keeps the original audio.",
+      "gallery_blurb": "Examples of restoration: the original video next to the restored result.",
+      "file": "restore_workflow.json",
+      "nodes": {"video": "5060", "output": "5140", "frame_cap": "5060"},
+      "prefix": "Cy_Restore",
+      "timeout_hours": 3,
+      "trim_frames": 0,
+      "free_after_run": true,
+      "compose_template": "comfy-restore",
+      "port": 8137,
+      "default_gpu": 0
     }
   },
+
 
   "_about_gpus": [
     "How ./start.sh spreads workflows over the GPUs it finds:",
@@ -53,6 +68,6 @@
     "gpu_plan pins workflows to GPUs by hand instead, e.g. {\"replace\": [0, 1], \"animate\": [1]}.",
     "GPUs in gpu_plan that the machine does not have are ignored."
   ],
-  "spare_gpus": ["replace", "animate"],
+  "spare_gpus": ["replace", "animate", "restore"],
   "gpu_plan": null
 }

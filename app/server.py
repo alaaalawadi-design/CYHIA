@@ -166,7 +166,7 @@ def _label(service: str) -> str:
 class Job:
     id: str
     service: str
-    image: Path
+    image: Path | None  # None for video-only workflows (restore)
     video: Path
     user_id: int = 0  # who submitted it; only they can see it or its result
     seq: int = 0  # submission order across ALL tabs; the queue runs by this
@@ -238,7 +238,8 @@ def _ahead(job: Job) -> int:
 def _fail(job: Job, message: str) -> None:
     job.state, job.error, job.finished = "error", message, time.time()
     for p in (job.image, job.video):
-        p.unlink(missing_ok=True)
+        if p:
+            p.unlink(missing_ok=True)
 
 
 def _pick(gpu: int) -> tuple[Job, Backend] | None:
@@ -555,7 +556,7 @@ def _execute(job: Job, backend: Backend) -> None:
             )
 
         job.stage = "Uploading inputs"
-        image_name = client.upload(job.image)
+        image_name = client.upload(job.image) if adapter.needs_image else None
         video_name = client.upload(job.video)
 
         # Unset in production: the workflow's own cap (1040 frames for replace)
@@ -614,7 +615,8 @@ def _execute(job: Job, backend: Backend) -> None:
         job.finished = time.time()
         shutil.rmtree(OUT_DIR / "incoming" / job.id, ignore_errors=True)
         for p in (job.image, job.video):  # already moved on success
-            p.unlink(missing_ok=True)
+            if p:
+                p.unlink(missing_ok=True)
         _prune()
 
 
@@ -634,7 +636,7 @@ def _keep_inputs(job: Job, trimmed: float = 0.0) -> None:
             json.dumps(job.settings, indent=2, ensure_ascii=False)
         )
     for kind, src in (("image", job.image), ("video", job.video)):
-        if not src.is_file():
+        if src is None or not src.is_file():
             continue
         if kind == "video" and trimmed > 0:
             if _trim(src, dest / f"{stem}__video.mp4", trimmed):
@@ -751,6 +753,7 @@ def services(_: User = Depends(current_user)) -> dict:
                 "label": ADAPTERS[n].label,
                 "blurb": ADAPTERS[n].blurb,
                 "gallery_blurb": ADAPTERS[n].gallery_blurb,
+                "needs_image": ADAPTERS[n].needs_image,
                 "gpus": sorted(GPUS_FOR[n]),
                 "servers": len(BY_WORKFLOW[n]),
             }
@@ -830,8 +833,8 @@ def _check_limits(service: str, user: User) -> None:
 @app.post("/api/{service}/jobs")
 def create_job(
     service: str,
-    image: UploadFile = File(...),
     video: UploadFile = File(...),
+    image: UploadFile | None = File(None),
     user: User = Depends(current_user),
 ) -> dict:
     if service not in SERVICES:
@@ -841,11 +844,15 @@ def create_job(
         raise HTTPException(
             503, f"The {_label(service)} server is not reachable. Other tabs may still work."
         )
-    img = _save(image, IMAGE_EXT, "image")
+    needs_image = ADAPTERS[service].needs_image
+    if needs_image and image is None:
+        raise HTTPException(400, f"{_label(service)} needs a reference image.")
+    img = _save(image, IMAGE_EXT, "image") if needs_image else None
     try:
         vid = _save(video, VIDEO_EXT, "video")
     except HTTPException:
-        img.unlink(missing_ok=True)
+        if img:
+            img.unlink(missing_ok=True)
         raise
 
     with LOCK:
@@ -854,7 +861,8 @@ def create_job(
         try:
             _check_limits(service, user)
         except HTTPException:
-            img.unlink(missing_ok=True)
+            if img:
+                img.unlink(missing_ok=True)
             vid.unlink(missing_ok=True)
             raise
         job = Job(

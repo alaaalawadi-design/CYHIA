@@ -144,6 +144,68 @@ services:
       start_period: 180s
 
   # ══════════════════════════════════════════════════════════════════════════
+  # LTX 2.5 video restoration (video in, video out; no reference image)
+  #
+  # Runs Nk_Restoration's own ComfyUI core (v0.42), custom nodes and models, on
+  # the venv they were validated with. Reuses the scail-replace image only for
+  # the OS, Python 3.12 and ffmpeg. It shares a GPU with the other workflows
+  # (one queue per GPU); free_after_run unloads its ~36 GB of weights after
+  # every job.
+  # ══════════════════════════════════════════════════════════════════════════
+  comfy-restore:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.restore
+    image: restore-gcc:latest
+    container_name: cyhia_comfy_restore
+    <<: *comfy-common
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+
+    environment:
+      <<: *comfy-env
+      NVIDIA_VISIBLE_DEVICES: "0"
+      COMFY_PORT: "8137"
+      # The core is mounted read-only, so Python cannot write __pycache__.
+      PYTHONDONTWRITEBYTECODE: "1"
+      VIRTUAL_ENV: ${RESTORE_VENV:-/home/administrator/Disk/Nk_Restoration/hf-venv}
+      PATH: ${RESTORE_VENV:-/home/administrator/Disk/Nk_Restoration/hf-venv}/bin:/usr/local/nvidia/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      LD_LIBRARY_PATH: /usr/local/nvidia/lib:/usr/local/nvidia/lib64
+      EXTRA_ARGS: "--input-directory /app/data/input --output-directory /app/data/output --temp-directory /app/data/temp --user-directory /app/data/user"
+
+    volumes:
+      # The whole ComfyUI tree, read-only: core, custom_nodes and models. Its
+      # .git is hidden behind an empty folder, and the folders ComfyUI writes
+      # to are replaced by this service's own, below.
+      - ${RESTORE_ROOT:-/home/administrator/Disk/Nk_Restoration}/ComfyUI:/app/ComfyUI:ro
+      - ./data/restore/empty_git:/app/ComfyUI/.git:ro
+      # The venv must sit at its host path; its scripts and pyvenv.cfg carry it.
+      - ${RESTORE_VENV:-/home/administrator/Disk/Nk_Restoration/hf-venv}:${RESTORE_VENV:-/home/administrator/Disk/Nk_Restoration/hf-venv}:ro
+      - ./docker/entrypoint-comfy.sh:/app/entrypoint-comfy.sh:ro
+      # ── Writable: this service's own input/output/temp/user. Mounted outside
+      # the read-only tree (Docker cannot create mount points inside it) and
+      # selected with EXTRA_ARGS above.
+      - ./data/restore/input:/app/data/input
+      - ./data/restore/output:/app/data/output
+      - ./data/restore/temp:/app/data/temp
+      - ./data/restore/user:/app/data/user
+
+    entrypoint: ["/app/entrypoint-comfy.sh"]
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8137/system_stats > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  # ══════════════════════════════════════════════════════════════════════════
   # The UI — no GPU. Phase 5.
   # ══════════════════════════════════════════════════════════════════════════
   ui:
@@ -162,6 +224,7 @@ services:
       # Service names on the cyhia network, so the UI needs no host ports.
       ANIMATE_URL: "${ANIMATE_URL:-http://comfy-animate:8134}"
       REPLACE_URL: "${REPLACE_URL:-http://comfy-replace:8136}"
+      RESTORE_URL: "${RESTORE_URL:-http://comfy-restore:8137}"
       UI_HOST: "0.0.0.0"
       UI_PORT: "7860"
       OUT_DIR: "/app/outputs"

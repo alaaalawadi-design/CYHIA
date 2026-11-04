@@ -1,0 +1,5 @@
+# comfy-restore = the scail-replace image plus a C compiler. Triton (used by
+# SageAttention) compiles a small driver stub at first use and needs gcc.
+FROM scail-replace:latest
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
