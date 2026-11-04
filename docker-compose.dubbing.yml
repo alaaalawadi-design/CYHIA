@@ -1,0 +1,88 @@
+##############################################################################
+#  cy_hia — Dubbing worker (TBDub), a script pipeline
+#
+#  Same pattern as docker-compose.lipsync.yml, and as separate:
+#    - its own compose project (cyhia-dubbing): up / down / restart here never
+#      touches the ComfyUI services, the Lip sync worker or the UI;
+#    - start.sh and scripts/gen_config.py never read this file.
+#  It joins the existing cyhia network, where the UI finds it at
+#  http://comfy-dubbing:8139 (workflows/pipelines.json).
+#
+#  TBDub (code, checkpoints and the venv that produced the gallery samples,
+#  copied from .22) is mounted read-only at its host path. The image only
+#  supplies the OS, /usr/bin/python3.12 (the venv's base), ffmpeg and the GL
+#  libraries MediaPipe/OpenCV load; scail-replace is already on the machine.
+#
+#    pipelines/dubbing/up.sh                                  # create data dirs + start
+#    docker compose -f docker-compose.dubbing.yml logs -f
+#    docker compose -f docker-compose.dubbing.yml down        # this worker only
+##############################################################################
+
+name: cyhia-dubbing
+
+services:
+  comfy-dubbing:
+    image: ${DUBBING_IMAGE:-scail-replace:latest}
+    container_name: cyhia_dubbing
+    restart: unless-stopped
+    user: "${DUBBING_UID:-1000}:${DUBBING_GID:-1000}"
+    shm_size: "32gb"
+    networks:
+      cyhia:
+        aliases: [comfy-dubbing]
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      # TBDub is read-only: keep every cache in the writable data folder.
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      HOME: /data/home
+      XDG_CACHE_HOME: /data/cache
+      HF_HOME: /data/cache/hf
+      TRITON_CACHE_DIR: /data/cache/triton
+      TORCHINDUCTOR_CACHE_DIR: /data/cache/inductor
+      NUMBA_CACHE_DIR: /data/cache/numba
+      MPLCONFIGDIR: /data/cache/matplotlib
+      DUBBING_PORT: "8139"
+      DUBBING_DATA: /data
+      TBDUB_ROOT: ${TBDUB_ROOT:-/home/administrator/Disk/alaa-work/TBDub-dubbing}
+      DUBBING_MAX_MINUTES: "30"
+      DUBBING_MAX_HOURS: "8"
+
+    # The worker itself needs only the standard library: run it on the image's
+    # python3.12, the same interpreter the TBDub venv is built on.
+    entrypoint: ["/usr/bin/python3.12", "-u", "/app/worker.py"]
+
+    volumes:
+      - ./pipelines/dubbing/worker.py:/app/worker.py:ro
+      - ${TBDUB_ROOT:-/home/administrator/Disk/alaa-work/TBDub-dubbing}:${TBDUB_ROOT:-/home/administrator/Disk/alaa-work/TBDub-dubbing}:ro
+      # ── Writable: uploads, job folders (logs), results, caches ──────────────
+      - ./data/dubbing:/data
+
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/python3.12
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8139/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  cyhia:
+    external: true
+    name: ${CYHIA_NETWORK:-cy_hia_cyhia}

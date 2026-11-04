@@ -5,20 +5,25 @@
     "see this file, so nothing here can change the ComfyUI tabs.",
     "One entry = one tab. The worker for each lives in pipelines/<name>/ and is started",
     "with its own compose file (docker-compose.<name>.yml).",
-    "args: the fixed command-line settings of the script. Users only give image, audio",
-    "and prompt; everything else is set here. Keys are avatar_generate.py options with",
-    "_ instead of -, e.g. max_seconds -> --max-seconds. true = flag on, null = script default."
+    "Uploads: needs_image = a reference image; media = what the main upload is",
+    "(audio or video); needs_audio = an extra audio upload (dubbing: video + audio).",
+    "default_prompt: the prompt every job uses. With needs_prompt false it is fixed:",
+    "users never see or change it.",
+    "max_input_minutes: longest video/audio accepted (checked in the page and by the worker).",
+    "labels: captions in the gallery and History (image, video, audio, result).",
+    "args: the fixed command-line settings of the script; users never change them.",
+    "Keys are the script's options with _ instead of -, e.g. max_seconds -> --max-seconds.",
+    "true = flag on, null = script default."
   ],
 
   "pipelines": {
     "lipsync": {
       "label": "Lip sync",
-      "blurb": "Makes the person in your image speak your audio, with accurate lip sync (LongCat-Video-Avatar 1.5). Upload a reference image and a speech audio file, and describe the video in the prompt. It takes about 2 minutes of processing per second of audio.",
-      "gallery_blurb": "Examples of lip sync: the reference image, the prompt it was run with, and the result.",
+      "blurb": "Makes the person in your image speak your audio, with accurate lip sync (LongCat-Video-Avatar 1.5). Upload a reference image and a speech audio file. It takes about 2 minutes of processing per second of audio.",
+      "gallery_blurb": "Examples of lip sync: the reference image and the result.",
       "media": "audio",
       "needs_image": true,
-      "needs_prompt": true,
-      "max_prompt_chars": 4000,
+      "needs_prompt": false,
       "default_prompt": "A photorealistic video of the person in the reference image speaking naturally and clearly to the camera, looking directly into the camera lens with steady eye contact and natural blinking. Accurate lip sync, with natural, clean and clearly defined teeth preserved exactly as in the reference image. Calm, subtle facial expressions and small, gentle natural head movements, with no exaggerated, sudden or large motions. Static camera with fixed framing, no zoom in, no zoom out and no camera movement. Face, hair, clothing, background and lighting stay exactly the same as in the reference image, natural skin texture.",
       "args": {
         "precision": "bf16",
@@ -41,6 +46,41 @@
       "gpu": 0,
       "backend": "comfy-lipsync",
       "url": "http://comfy-lipsync:8138"
+    },
+
+    "dubbing": {
+      "label": "Dubbing",
+      "blurb": "Gives an existing video a new voice: the speaker's lips are re-synced to the audio you upload, while their face, motion and background stay the same (TBDub). Upload the video and the dubbed speech audio, each up to 30 minutes. In shots with several people, the one who is talking is found and dubbed.",
+      "gallery_blurb": "Examples of dubbing: the original video and the dubbed result.",
+      "media": "video",
+      "needs_image": false,
+      "needs_audio": true,
+      "needs_prompt": false,
+      "max_input_minutes": 30,
+      "labels": {"video": "Original video", "audio": "Dubbed audio", "result": "Dubbed video"},
+      "args": {
+        "inference_mode": "student",
+        "num_student_steps": 2,
+        "sigma_shift": 1.0,
+        "motion_from_latents": true,
+        "seed": 42
+      },
+      "stages": {
+        "queued": "Waiting for the worker",
+        "prepare": "Preparing",
+        "scan": "Scanning faces",
+        "speaker": "Finding who speaks",
+        "plan": "Planning segments",
+        "generate": "Dubbing segments",
+        "assemble": "Assembling video",
+        "save": "Saving video"
+      },
+      "prefix": "Cy_Dubbing",
+      "timeout_hours": 6,
+      "free_after_run": true,
+      "gpu": 0,
+      "backend": "comfy-dubbing",
+      "url": "http://comfy-dubbing:8139"
     }
   }
 }

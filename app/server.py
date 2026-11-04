@@ -194,6 +194,7 @@ class Job:
     gpu: int | None = None
     dismissed: bool = False  # the user removed it from their job list
     prompt: str | None = None  # script pipelines only (lipsync); None for ComfyUI tabs
+    audio: Path | None = None  # script pipelines only: extra audio upload (dubbing)
 
     def public(self) -> dict:
         now = time.time()
@@ -248,7 +249,7 @@ def _ahead(job: Job) -> int:
 # ── the scheduler: one worker per GPU over one shared waiting list ───────────
 def _fail(job: Job, message: str) -> None:
     job.state, job.error, job.finished = "error", message, time.time()
-    for p in (job.image, job.video):
+    for p in (job.image, job.video, job.audio):
         if p:
             p.unlink(missing_ok=True)
 
@@ -576,6 +577,8 @@ def _execute(job: Job, backend: Backend) -> None:
         job.settings = workflow_settings.overrides(job.service)
         # Only script pipelines take a prompt; ComfyUI tabs are built exactly as before.
         extra = {"prompt": job.prompt} if job.prompt is not None else {}
+        if job.audio is not None:  # dubbing: the extra audio upload
+            extra["audio_name"] = client.upload(job.audio)
         workflow = adapter.build(
             image_name, video_name, frame_cap=int(cap) if cap else None, **extra
         )
@@ -627,7 +630,7 @@ def _execute(job: Job, backend: Backend) -> None:
     finally:
         job.finished = time.time()
         shutil.rmtree(OUT_DIR / "incoming" / job.id, ignore_errors=True)
-        for p in (job.image, job.video):  # already moved on success
+        for p in (job.image, job.video, job.audio):  # already moved on success
             if p:
                 p.unlink(missing_ok=True)
         _prune()
@@ -652,7 +655,7 @@ def _keep_inputs(job: Job, trimmed: float = 0.0) -> None:
         (dest / f"{stem}__prompt.txt").write_text(job.prompt, encoding="utf-8")
     # The main upload is saved as __audio.* for audio pipelines, __video.* otherwise.
     media = getattr(ADAPTERS[job.service], "media", "video")
-    for kind, src in (("image", job.image), (media, job.video)):
+    for kind, src in (("image", job.image), (media, job.video), ("audio", job.audio)):
         if src is None or not src.is_file():
             continue
         if kind == "video" and trimmed > 0:
@@ -774,8 +777,13 @@ def services(_: User = Depends(current_user)) -> dict:
                 # Script pipelines only; ComfyUI tabs get the defaults (video, no prompt).
                 "media": getattr(ADAPTERS[n], "media", "video"),
                 "needs_prompt": getattr(ADAPTERS[n], "needs_prompt", False),
-                "default_prompt": getattr(ADAPTERS[n], "default_prompt", ""),
+                # A fixed prompt (needs_prompt false) is never sent to the page.
+                "default_prompt": getattr(ADAPTERS[n], "default_prompt", "")
+                if getattr(ADAPTERS[n], "needs_prompt", False) else "",
                 "max_prompt_chars": getattr(ADAPTERS[n], "max_prompt_chars", 0),
+                "needs_audio": getattr(ADAPTERS[n], "needs_audio", False),
+                "max_input_minutes": getattr(ADAPTERS[n], "max_input_minutes", 0),
+                "labels": getattr(ADAPTERS[n], "labels", {}),
                 "gpus": sorted(GPUS_FOR[n]),
                 "servers": len(BY_WORKFLOW[n]),
             }
@@ -858,6 +866,7 @@ def create_job(
     video: UploadFile = File(...),
     image: UploadFile | None = File(None),
     prompt: str | None = Form(None),  # script pipelines only; ignored by ComfyUI tabs
+    audio: UploadFile | None = File(None),  # script pipelines with needs_audio (dubbing)
     user: User = Depends(current_user),
 ) -> dict:
     if service not in SERVICES:
@@ -881,12 +890,19 @@ def create_job(
         prompt = None
     # The main upload is a video for ComfyUI tabs, audio for audio pipelines.
     media = getattr(ADAPTERS[service], "media", "video")
+    needs_audio = getattr(ADAPTERS[service], "needs_audio", False)
+    if needs_audio and audio is None:
+        raise HTTPException(400, f"{_label(service)} needs an audio file.")
     img = _save(image, IMAGE_EXT, "image") if needs_image else None
+    vid = aud = None
     try:
         vid = _save(video, MEDIA_EXT[media], media)
+        if needs_audio:  # dubbing: video + audio; ComfyUI tabs never get here
+            aud = _save(audio, AUDIO_EXT, "audio")
     except HTTPException:
-        if img:
-            img.unlink(missing_ok=True)
+        for p in (img, vid):
+            if p:
+                p.unlink(missing_ok=True)
         raise
 
     with LOCK:
@@ -895,9 +911,9 @@ def create_job(
         try:
             _check_limits(service, user)
         except HTTPException:
-            if img:
-                img.unlink(missing_ok=True)
-            vid.unlink(missing_ok=True)
+            for p in (img, vid, aud):
+                if p:
+                    p.unlink(missing_ok=True)
             raise
         job = Job(
             id=uuid.uuid4().hex,
@@ -908,6 +924,7 @@ def create_job(
             seq=next(_SEQ),
             created=time.time(),
             prompt=prompt,
+            audio=aud,
         )
         JOBS[job.id] = job
         LOCK.notify_all()  # wake the GPU workers

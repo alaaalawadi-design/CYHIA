@@ -382,6 +382,18 @@
             <div class="fmeta" hidden><div class="fn"></div><div class="fd"></div></div>
             <button type="button" class="swap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="14" height="14" rx="3"/><path d="M16.5 10l5-3v10l-5-3z"/></svg><span>Choose video</span></button>
           </div>
+          <!-- Extra audio upload: only on tabs with needs_audio (Dubbing); removed from the others. -->
+          <div class="asset" data-kind="audio">
+            <div class="asset-head"><span>Audio</span><button type="button" class="more" aria-label="Audio options" aria-haspopup="menu" aria-expanded="false">⋯</button></div>
+            <div class="menu" role="menu" hidden>
+              <button type="button" role="menuitem" data-act="pick">Choose file…</button>
+              <button type="button" role="menuitem" data-act="clear">Remove</button>
+            </div>
+            <input type="file" accept="audio/*" hidden>
+            <button type="button" class="thumb" aria-label="Choose audio"><span class="hint"><strong>Drop audio or click</strong>WAV, MP3 or M4A</span></button>
+            <div class="fmeta" hidden><div class="fn"></div><div class="fd"></div></div>
+            <button type="button" class="swap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Choose audio</span></button>
+          </div>
           <div class="prompt-box" hidden>
             <div class="asset-head"><span>Prompt</span></div>
             <textarea rows="7" spellcheck="true" aria-label="Prompt"></textarea>
@@ -765,6 +777,19 @@ function makePanel(service) {
   const needsPrompt = !!SERVICES[service].needs_prompt;
   const promptText = $(".prompt-box textarea");
   let imageUrl = null;                 // shown as the poster while previewing audio
+  // Dubbing: an extra audio upload next to the video. Other tabs drop the card,
+  // so their panels are exactly as before.
+  const needsAudio = !!SERVICES[service].needs_audio;
+  if (needsAudio) {
+    const lab = SERVICES[service].labels || {};
+    if (lab.audio) $('.asset[data-kind="audio"] .asset-head span').textContent = lab.audio;
+    if (lab.video) $('.asset[data-kind="video"] .asset-head span').textContent = lab.video;
+  } else {
+    $('.asset[data-kind="audio"]').remove();
+  }
+  // Longest video/audio the tab accepts (Dubbing: 30 min); 0 = no limit.
+  const maxSeconds = (SERVICES[service].max_input_minutes || 0) * 60;
+  const lengths = {};                  // kind -> seconds of the chosen file
   if (isAudio) {
     const card = $('.asset[data-kind="video"]');
     card.querySelector(".asset-head span").textContent = "Speech audio";
@@ -900,6 +925,7 @@ function makePanel(service) {
       thumb.querySelector("img,video")?.remove();
       thumb.querySelector(".audio-ico")?.remove();
       files[kind] = file || null;
+      delete lengths[kind];
       card.classList.toggle("has", !!file);
       card.querySelector(".swap span").textContent = `${file ? "Replace" : "Choose"} ${noun}`;
       card.querySelector('[data-act="clear"]').disabled = !file;
@@ -913,6 +939,11 @@ function makePanel(service) {
             card.querySelector(".fd").textContent = noun === "audio"
               ? clock(m.duration)
               : `${clock(m.duration)}  •  ${m.videoWidth} × ${m.videoHeight}`;
+            if (maxSeconds) {            // Dubbing: say at once when a file is too long
+              lengths[kind] = m.duration;
+              if (m.duration > maxSeconds) card.querySelector(".fd").textContent += `  •  longer than ${maxSeconds / 60} min`;
+              refresh();
+            }
           });
         }
         thumb.prepend(m);
@@ -923,12 +954,12 @@ function makePanel(service) {
         }
       }
       if (kind === "image" && isAudio) { imageUrl = url; syncPoster(); }
-      if (kind === "video") {
+      if (kind === "video" || kind === "audio") {   // "audio" = Dubbing's extra card
         card.querySelector(".fmeta").hidden = !file;
         card.querySelector(".fn").textContent = file ? file.name : "";
         card.querySelector(".fd").textContent = "";
-        setMedia("source", file ? { src: url, size: file.size } : null);
       }
+      if (kind === "video") setMedia("source", file ? { src: url, size: file.size } : null);
       refresh();
     };
     const pick = () => input.click();
@@ -962,9 +993,12 @@ function makePanel(service) {
   // MAX_PER_USER waiting or running in this tab (the server enforces the same).
   function refresh() {
     const full = active >= MAX_PER_USER;
+    // Dubbing only: a file over the tab's length limit (maxSeconds is 0 elsewhere).
+    const tooLong = maxSeconds > 0 && Object.values(lengths).some(d => d > maxSeconds);
     go.disabled = uploading || full || (needsImage && !files.image) || !files.video
-      || (needsPrompt && !promptText.value.trim());
-    go.textContent = uploading ? "Uploading…" : full ? `Limit reached (${MAX_PER_USER} in progress)` : "Generate";
+      || (needsPrompt && !promptText.value.trim()) || (needsAudio && !files.audio) || tooLong;
+    go.textContent = uploading ? "Uploading…" : full ? `Limit reached (${MAX_PER_USER} in progress)`
+      : tooLong ? `Over ${maxSeconds / 60} min: not accepted` : "Generate";
     $(".quota").hidden = !active;
     $(".quota").textContent = `${active} of ${MAX_PER_USER} in progress`;
   }
@@ -986,6 +1020,7 @@ function makePanel(service) {
     const fd = new FormData();
     if (needsImage) fd.append("image", files.image);
     fd.append("video", files.video);   // the audio file on the Lip sync tab
+    if (needsAudio) fd.append("audio", files.audio);   // Dubbing: the dubbed audio
     if (needsPrompt) fd.append("prompt", promptText.value.trim());
     uploading = true; refresh();
     show({ stage: "Uploading", meta: "0%", fraction: 0 });
@@ -1414,8 +1449,9 @@ async function loadGallery(service) {
     if (c.note) { const n = document.createElement("p"); n.className = "note"; n.textContent = c.note; card.append(n); }
     const grid = document.createElement("div"); grid.className = "hist-grid";
     const ins = document.createElement("div"); ins.className = "ins";
-    ins.append(...[fig("Reference", "img", c.image), fig("Driving video", "video", c.video)].filter(Boolean));
-    const res = fig("Result", "video", c.result); res.className = "res";
+    const lab = SERVICES[service]?.labels || {};   // per-tab captions (Dubbing); defaults otherwise
+    ins.append(...[fig(lab.image || "Reference", "img", c.image), fig(lab.video || "Driving video", "video", c.video)].filter(Boolean));
+    const res = fig(lab.result || "Result", "video", c.result); res.className = "res";
     if (ins.children.length) grid.append(ins); else grid.style.gridTemplateColumns = "1fr";
     grid.append(res);
     card.append(grid); list.append(card);
@@ -1434,6 +1470,7 @@ function renderHistory() {
   list.replaceChildren();
   document.getElementById("hist-empty").hidden = rows.length > 0;
   for (const r of rows) {
+    const lab = SERVICES[r.service]?.labels || {};   // per-tab captions (Dubbing); defaults otherwise
     const card = document.createElement("article"); card.className = "card case";
     const row = document.createElement("div"); row.className = "meta-row";
     const b = document.createElement("span"); b.className = `badge ${r.service}`; b.textContent = r.service;
@@ -1451,21 +1488,21 @@ function renderHistory() {
     const ins = document.createElement("div"); ins.className = "ins";
     if (r.image_url) {
       const img = document.createElement("img"); img.src = r.image_url; img.loading = "lazy"; img.alt = "Reference image";
-      ins.append(fig("Reference image", img));
+      ins.append(fig(lab.image || "Reference image", img));
     }
     if (r.video_url) {
       const iv = document.createElement("video");
       iv.src = r.video_url; iv.controls = true; iv.playsInline = true; iv.preload = "metadata";
-      ins.append(fig("Driving video", iv));
+      ins.append(fig(lab.video || "Driving video", iv));
     }
     if (r.audio_url) {                 // Lip sync only: the speech audio it was given
       const au = document.createElement("audio");
       au.src = r.audio_url; au.controls = true; au.preload = "metadata";
-      ins.append(fig("Speech audio", au));
+      ins.append(fig(lab.audio || "Speech audio", au));
     }
     const v = document.createElement("video");
     v.src = r.url; v.controls = true; v.playsInline = true; v.preload = "metadata";
-    const res = fig("Result", v); res.className = "res";
+    const res = fig(lab.result || "Result", v); res.className = "res";
     grid.append(...(ins.children.length ? [ins] : []), res);
     if (!ins.children.length) grid.style.gridTemplateColumns = "1fr";
     const extra = [];

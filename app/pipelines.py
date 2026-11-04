@@ -1,9 +1,13 @@
 """
 Script pipelines: tabs whose backend runs a script instead of ComfyUI.
 
-The first one is "lipsync" (LongCat-Video-Avatar 1.5: image + audio + prompt ->
-talking video). Its worker (pipelines/lipsync/worker.py) runs run_avatar.sh on
-the GPU and answers a small HTTP API. This module is the UI's side of it:
+  lipsync  LongCat-Video-Avatar 1.5: image + audio -> talking video
+           (pipelines/lipsync/worker.py runs run_avatar.sh)
+  dubbing  TBDub: video + audio -> the video with re-synced lips
+           (pipelines/dubbing/worker.py runs episode_dub.py)
+
+Each worker runs its script on the GPU and answers the same small HTTP API.
+This module is the UI's side of it:
 
   PipelineAdapter  plays the part of workflows.Adapter for the scheduler and
                    the page (label, blurb, timeout, output prefix, ...), and
@@ -47,11 +51,14 @@ class PipelineAdapter:
     label: str
     blurb: str = ""
     gallery_blurb: str = ""
-    media: str = "audio"            # what the second upload is: "audio" (or "video")
+    media: str = "audio"            # what the main upload is: "audio" (lipsync) or "video" (dubbing)
     needs_image: bool = True
-    needs_prompt: bool = True
+    needs_audio: bool = False       # an extra audio upload next to the video (dubbing)
+    needs_prompt: bool = True       # false = default_prompt is used, users never see it
     default_prompt: str = ""
     max_prompt_chars: int = 4000
+    max_input_minutes: float = 0    # longest video/audio accepted; 0 = no limit
+    labels: dict = field(default_factory=dict)   # captions: image, video, audio, result
     args: dict = field(default_factory=dict)     # fixed script settings
     stages: dict = field(default_factory=dict)   # stage code -> label shown in the UI
     prefix: str = ""
@@ -75,15 +82,23 @@ class PipelineAdapter:
         return {}
 
     def build(self, image_name: str | None, video_name: str, *,
-              frame_cap: int | None = None, prompt: str | None = None) -> dict:
-        """The job spec the worker runs. frame_cap is a ComfyUI-only setting."""
-        return {
-            "image": image_name,
-            "audio": video_name,
-            "prompt": (prompt or self.default_prompt).strip(),
-            "args": dict(self.args),
-            "output_prefix": self.output_prefix,
-        }
+              frame_cap: int | None = None, prompt: str | None = None,
+              audio_name: str | None = None) -> dict:
+        """
+        The job spec the worker runs. frame_cap is a ComfyUI-only setting.
+          lipsync: {"image", "audio" (the main upload), "prompt", ...}
+          dubbing: {"video" (the main upload), "audio" (the extra upload), ...}
+        """
+        spec = {"args": dict(self.args), "output_prefix": self.output_prefix}
+        if self.needs_image:
+            spec["image"] = image_name
+        spec[self.media] = video_name
+        if self.needs_audio:
+            spec["audio"] = audio_name
+        text = (prompt or self.default_prompt).strip()
+        if text:
+            spec["prompt"] = text
+        return spec
 
 
 class PipelineClient:
@@ -125,13 +140,19 @@ class PipelineClient:
         if not src.is_file():
             raise ComfyError(f"input file not found: {src}")
         name = f"{uuid.uuid4().hex}{src.suffix.lower()}"
-        with src.open("rb") as fh:
-            r = httpx.post(
-                f"{self.base_url}/upload",
-                content=fh.read(),
-                headers={"X-Filename": name, "Content-Type": "application/octet-stream"},
-                timeout=300.0,
-            )
+
+        def chunks():  # streamed: a 30-minute video can be over a gigabyte
+            with src.open("rb") as fh:
+                while chunk := fh.read(1 << 20):
+                    yield chunk
+
+        r = httpx.post(
+            f"{self.base_url}/upload",
+            content=chunks(),
+            headers={"X-Filename": name, "Content-Type": "application/octet-stream",
+                     "Content-Length": str(src.stat().st_size)},
+            timeout=900.0,
+        )
         if r.status_code != 200:
             raise ComfyError(f"{self.name} refused the upload: {_detail(r)}")
         return r.json()["name"]
@@ -236,9 +257,12 @@ def _load() -> dict[str, PipelineAdapter]:
             gallery_blurb=s.get("gallery_blurb", ""),
             media=s.get("media", "audio"),
             needs_image=bool(s.get("needs_image", True)),
+            needs_audio=bool(s.get("needs_audio", False)),
             needs_prompt=bool(s.get("needs_prompt", True)),
             default_prompt=s.get("default_prompt", ""),
             max_prompt_chars=int(s.get("max_prompt_chars", 4000)),
+            max_input_minutes=float(s.get("max_input_minutes", 0) or 0),
+            labels=dict(s.get("labels") or {}),
             args=dict(s.get("args") or {}),
             stages=dict(s.get("stages") or {}),
             prefix=s.get("prefix", ""),
