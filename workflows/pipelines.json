@@ -1,0 +1,46 @@
+{
+  "_about": [
+    "Script pipelines: tabs whose backend runs a script (not ComfyUI).",
+    "Read only by app/pipelines.py. workflows.json, start.sh and gen_config.py never",
+    "see this file, so nothing here can change the ComfyUI tabs.",
+    "One entry = one tab. The worker for each lives in pipelines/<name>/ and is started",
+    "with its own compose file (docker-compose.<name>.yml).",
+    "args: the fixed command-line settings of the script. Users only give image, audio",
+    "and prompt; everything else is set here. Keys are avatar_generate.py options with",
+    "_ instead of -, e.g. max_seconds -> --max-seconds. true = flag on, null = script default."
+  ],
+
+  "pipelines": {
+    "lipsync": {
+      "label": "Lip sync",
+      "blurb": "Makes the person in your image speak your audio, with accurate lip sync (LongCat-Video-Avatar 1.5). Upload a reference image and a speech audio file, and describe the video in the prompt. It takes about 2 minutes of processing per second of audio.",
+      "gallery_blurb": "Examples of lip sync: the reference image, the prompt it was run with, and the result.",
+      "media": "audio",
+      "needs_image": true,
+      "needs_prompt": true,
+      "max_prompt_chars": 4000,
+      "default_prompt": "A photorealistic video of the person in the reference image speaking naturally and clearly to the camera, looking directly into the camera lens with steady eye contact and natural blinking. Accurate lip sync, with natural, clean and clearly defined teeth preserved exactly as in the reference image. Calm, subtle facial expressions and small, gentle natural head movements, with no exaggerated, sudden or large motions. Static camera with fixed framing, no zoom in, no zoom out and no camera movement. Face, hair, clothing, background and lighting stay exactly the same as in the reference image, natural skin texture.",
+      "args": {
+        "precision": "bf16",
+        "lora_multiplier": 0.45,
+        "resolution": "720p",
+        "seed": 42,
+        "max_seconds": 60,
+        "no_segments": true
+      },
+      "stages": {
+        "queued": "Waiting for the worker",
+        "audio": "Preparing audio",
+        "models": "Loading models",
+        "generate": "Generating video",
+        "save": "Saving video"
+      },
+      "prefix": "Cy_LipSync",
+      "timeout_hours": 4,
+      "free_after_run": true,
+      "gpu": 0,
+      "backend": "comfy-lipsync",
+      "url": "http://comfy-lipsync:8138"
+    }
+  }
+}

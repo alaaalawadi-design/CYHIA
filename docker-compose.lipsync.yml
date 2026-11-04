@@ -1,0 +1,93 @@
+##############################################################################
+#  cy_hia — Lip sync worker (LongCat-Video-Avatar 1.5), a script pipeline
+#
+#  Separate from docker-compose.yml on purpose:
+#    - its own compose project (cyhia-lipsync), so up / down / restart here
+#      never touches comfy-replace, comfy-animate, comfy-restore or the UI;
+#    - start.sh and scripts/gen_config.py never read this file.
+#  It joins the existing cyhia network, where the UI finds it at
+#  http://comfy-lipsync:8138 (workflows/pipelines.json).
+#
+#  Nothing is built or copied: the LongCat project, its weights and its Python
+#  env are mounted read-only at their host paths, so the container runs exactly
+#  the install that run_avatar.sh runs on the host. The image only supplies the
+#  OS (Ubuntu 24.04); scail-replace is already on the machine, so nothing is pulled.
+#
+#    pipelines/lipsync/up.sh                                  # create data dirs + start
+#    docker compose -f docker-compose.lipsync.yml logs -f
+#    docker compose -f docker-compose.lipsync.yml down        # this worker only
+##############################################################################
+
+name: cyhia-lipsync
+
+services:
+  comfy-lipsync:
+    image: ${LIPSYNC_IMAGE:-scail-replace:latest}
+    container_name: cyhia_lipsync
+    restart: unless-stopped
+    # Same user as the host install, so data/lipsync stays owned by it.
+    user: "${LIPSYNC_UID:-1000}:${LIPSYNC_GID:-1000}"
+    # DiT blocks are streamed from pinned CPU memory; the default 64 MB /dev/shm is too small.
+    shm_size: "32gb"
+    networks:
+      cyhia:
+        aliases: [comfy-lipsync]
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      # The project and env are read-only: keep every cache in the writable data folder.
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      HOME: /data/home
+      XDG_CACHE_HOME: /data/cache
+      HF_HOME: /data/cache/hf
+      TRITON_CACHE_DIR: /data/cache/triton
+      TORCHINDUCTOR_CACHE_DIR: /data/cache/inductor
+      NUMBA_CACHE_DIR: /data/cache/numba
+      MPLCONFIGDIR: /data/cache/matplotlib
+      LIPSYNC_PORT: "8138"
+      LIPSYNC_DATA: /data
+      LIPSYNC_SCRIPT: ${LONGCAT_ROOT:-/home/administrator/Disk/alaa-work/LongCat-Video}/run_avatar.sh
+      LIPSYNC_MAX_HOURS: "6"
+
+    entrypoint:
+      - ${LONGCAT_ENV:-/home/administrator/Disk/alaa-work/longcat}/bin/python
+      - -u
+      - /app/worker.py
+
+    volumes:
+      - ./pipelines/lipsync/worker.py:/app/worker.py:ro
+      # At their host paths: run_avatar.sh and the env carry those paths.
+      - ${LONGCAT_ROOT:-/home/administrator/Disk/alaa-work/LongCat-Video}:${LONGCAT_ROOT:-/home/administrator/Disk/alaa-work/LongCat-Video}:ro
+      - ${LONGCAT_ENV:-/home/administrator/Disk/alaa-work/longcat}:${LONGCAT_ENV:-/home/administrator/Disk/alaa-work/longcat}:ro
+      # ── Writable: uploads, job folders (logs), results, caches ──────────────
+      - ./data/lipsync:/data
+
+    healthcheck:
+      test:
+        - CMD
+        - ${LONGCAT_ENV:-/home/administrator/Disk/alaa-work/longcat}/bin/python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8138/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  cyhia:
+    # The network docker-compose.yml created (project cy_hia).
+    external: true
+    name: ${CYHIA_NETWORK:-cy_hia_cyhia}

@@ -201,6 +201,24 @@
   .go:not(:disabled):hover { transform: translateY(-1px); background: var(--accent-hover); }
   .go:disabled { opacity: .5; cursor: not-allowed; }
   .quota { margin: -4px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+  /* Script pipelines (Lip sync): prompt box and audio upload. Hidden on the other tabs. */
+  .prompt-box {
+    position: relative; min-width: 0; padding: 12px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow);
+  }
+  .side .prompt-box { grid-column: 1 / -1; }
+  .prompt-box textarea {
+    display: block; width: 100%; min-height: 150px; resize: vertical; padding: 10px; box-sizing: border-box;
+    font: inherit; font-size: 13px; line-height: 1.45; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: 8px;
+  }
+  .prompt-box textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .prompt-box .pmeta { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .prompt-box .preset { font: inherit; font-size: 12px; padding: 0; border: 0; background: none; color: var(--accent); cursor: pointer; }
+  .thumb .audio-ico { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; pointer-events: none; }
+  .thumb .audio-ico svg { width: 44px; height: 44px; opacity: .85; }
+  .case .prompt-text { white-space: pre-wrap; }
+  .case audio { width: 100%; display: block; }
   @media (max-width: 880px) { .side .quota { grid-column: 1 / -1; } }
 
   /* ── this user's jobs in one tab: waiting, running and finished ───────────── */
@@ -363,6 +381,11 @@
             <button type="button" class="thumb" aria-label="Choose video"><span class="hint"><strong>Drop a video or click</strong>MP4, MOV or WebM</span></button>
             <div class="fmeta" hidden><div class="fn"></div><div class="fd"></div></div>
             <button type="button" class="swap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="14" height="14" rx="3"/><path d="M16.5 10l5-3v10l-5-3z"/></svg><span>Choose video</span></button>
+          </div>
+          <div class="prompt-box" hidden>
+            <div class="asset-head"><span>Prompt</span></div>
+            <textarea rows="7" spellcheck="true" aria-label="Prompt"></textarea>
+            <div class="pmeta"><span class="pcount"></span><button type="button" class="preset">Reset to default</button></div>
           </div>
           <button class="go" disabled>Generate</button>
           <p class="quota" hidden></p>
@@ -736,6 +759,40 @@ function makePanel(service) {
   const go = $(".go");
   let uploading = false, active = 0;   // active = this user's waiting + running jobs here
 
+  // Script pipelines (Lip sync): the second upload is audio, and there is a prompt.
+  // Both are off for the ComfyUI tabs (media "video", no prompt): their panels are unchanged.
+  const isAudio = SERVICES[service].media === "audio";
+  const needsPrompt = !!SERVICES[service].needs_prompt;
+  const promptText = $(".prompt-box textarea");
+  let imageUrl = null;                 // shown as the poster while previewing audio
+  if (isAudio) {
+    const card = $('.asset[data-kind="video"]');
+    card.querySelector(".asset-head span").textContent = "Speech audio";
+    card.querySelector(".more").setAttribute("aria-label", "Speech audio options");
+    card.querySelector("input").accept = "audio/*";
+    card.querySelector(".thumb").setAttribute("aria-label", "Choose audio");
+    card.querySelector(".thumb .hint").innerHTML = "<strong>Drop audio or click</strong>WAV, MP3 or M4A";
+    card.querySelector(".swap svg").innerHTML = '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>';
+    $(".placeholder").textContent = "Add speech audio to preview it here. The result appears here when it is ready.";
+  }
+  if (needsPrompt) {
+    $(".prompt-box").hidden = false;
+    const def = SERVICES[service].default_prompt || "", key = `prompt:${service}`;
+    const max = SERVICES[service].max_prompt_chars || 0;
+    if (max) promptText.maxLength = max;
+    promptText.value = store.get(key) ?? def;      // the user's last draft, else the default
+    const count = () => { $(".pcount").textContent = max ? `${promptText.value.length} / ${max}` : ""; };
+    promptText.addEventListener("input", () => {
+      store.set(key, promptText.value === def ? null : promptText.value); count(); refresh();
+    });
+    $(".preset").addEventListener("click", () => { promptText.value = def; store.set(key, null); count(); refresh(); });
+    count();
+  }
+  function syncPoster() {
+    if (!isAudio) return;
+    if (mode === "source" && imageUrl) v.poster = imageUrl; else v.removeAttribute("poster");
+  }
+
   // ── player: one <video> shows either the source upload or the result ───────
   const v = $(".screen video"), timeline = $(".timeline");
   const media = { source: null, result: null };   // { src, size } per view
@@ -751,6 +808,7 @@ function makePanel(service) {
     if (!m) { v.removeAttribute("src"); v.load(); }
     else if (v.getAttribute("src") !== m.src) v.src = m.src;
     v.hidden = !m; $(".placeholder").hidden = !!m; timeline.hidden = !m;
+    syncPoster();
     ["play", "step", "mute", "full"].forEach(c => $(`.ctl.${c}`).disabled = !m);
     if (!m) { gen++; $(".cur").textContent = $(".dur").textContent = "00:00"; }
   }
@@ -769,7 +827,10 @@ function makePanel(service) {
     const my = ++gen, alive = () => my === gen;
     drawnWidth = timeline.clientWidth;
     drawRuler($(".ruler"), d);
-    drawFilmstrip($(".film canvas"), m.src, d, alive);
+    // An audio source has no frames to draw; the filmstrip is only for videos.
+    const noFrames = isAudio && mode === "source";
+    $(".track.film").hidden = noFrames;
+    if (!noFrames) drawFilmstrip($(".film canvas"), m.src, d, alive);
     const none = $(".wave .none"), wc = $(".wave canvas");
     none.hidden = false; none.textContent = "Reading audio…"; sizeCanvas(wc);
     loadPeaks(m.src, m.size).then(r => {
@@ -830,14 +891,17 @@ function makePanel(service) {
   el.querySelectorAll(".asset").forEach(card => {
     const kind = card.dataset.kind, input = card.querySelector("input"), thumb = card.querySelector(".thumb");
     const menu = card.querySelector(".menu"), more = card.querySelector(".more");
+    // "audio" for the Lip sync tab's second card; the card keeps data-kind="video".
+    const noun = kind === "video" && isAudio ? "audio" : kind;
     let url = null;
     const set = file => {
       if (url) URL.revokeObjectURL(url);
       url = null;
       thumb.querySelector("img,video")?.remove();
+      thumb.querySelector(".audio-ico")?.remove();
       files[kind] = file || null;
       card.classList.toggle("has", !!file);
-      card.querySelector(".swap span").textContent = `${file ? "Replace" : "Choose"} ${kind}`;
+      card.querySelector(".swap span").textContent = `${file ? "Replace" : "Choose"} ${noun}`;
       card.querySelector('[data-act="clear"]').disabled = !file;
       if (file) {
         url = URL.createObjectURL(file);
@@ -846,11 +910,19 @@ function makePanel(service) {
         else {
           m.muted = true; m.playsInline = true; m.preload = "metadata"; m.src = `${url}#t=0.1`;
           m.addEventListener("loadedmetadata", () => {
-            card.querySelector(".fd").textContent = `${clock(m.duration)}  •  ${m.videoWidth} × ${m.videoHeight}`;
+            card.querySelector(".fd").textContent = noun === "audio"
+              ? clock(m.duration)
+              : `${clock(m.duration)}  •  ${m.videoWidth} × ${m.videoHeight}`;
           });
         }
         thumb.prepend(m);
+        if (noun === "audio") {
+          const ico = document.createElement("span"); ico.className = "audio-ico";
+          ico.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+          thumb.prepend(ico);
+        }
       }
+      if (kind === "image" && isAudio) { imageUrl = url; syncPoster(); }
       if (kind === "video") {
         card.querySelector(".fmeta").hidden = !file;
         card.querySelector(".fn").textContent = file ? file.name : "";
@@ -882,7 +954,7 @@ function makePanel(service) {
     card.addEventListener("drop", e => {
       e.preventDefault(); card.classList.remove("over");
       const f = e.dataTransfer.files[0];
-      if (f && f.type.startsWith(kind + "/")) set(f);
+      if (f && f.type.startsWith(noun + "/")) set(f);
     });
   });
 
@@ -890,7 +962,8 @@ function makePanel(service) {
   // MAX_PER_USER waiting or running in this tab (the server enforces the same).
   function refresh() {
     const full = active >= MAX_PER_USER;
-    go.disabled = uploading || full || (needsImage && !files.image) || !files.video;
+    go.disabled = uploading || full || (needsImage && !files.image) || !files.video
+      || (needsPrompt && !promptText.value.trim());
     go.textContent = uploading ? "Uploading…" : full ? `Limit reached (${MAX_PER_USER} in progress)` : "Generate";
     $(".quota").hidden = !active;
     $(".quota").textContent = `${active} of ${MAX_PER_USER} in progress`;
@@ -912,7 +985,8 @@ function makePanel(service) {
   go.addEventListener("click", () => {
     const fd = new FormData();
     if (needsImage) fd.append("image", files.image);
-    fd.append("video", files.video);
+    fd.append("video", files.video);   // the audio file on the Lip sync tab
+    if (needsPrompt) fd.append("prompt", promptText.value.trim());
     uploading = true; refresh();
     show({ stage: "Uploading", meta: "0%", fraction: 0 });
 
@@ -1384,12 +1458,22 @@ function renderHistory() {
       iv.src = r.video_url; iv.controls = true; iv.playsInline = true; iv.preload = "metadata";
       ins.append(fig("Driving video", iv));
     }
+    if (r.audio_url) {                 // Lip sync only: the speech audio it was given
+      const au = document.createElement("audio");
+      au.src = r.audio_url; au.controls = true; au.preload = "metadata";
+      ins.append(fig("Speech audio", au));
+    }
     const v = document.createElement("video");
     v.src = r.url; v.controls = true; v.playsInline = true; v.preload = "metadata";
     const res = fig("Result", v); res.className = "res";
     grid.append(...(ins.children.length ? [ins] : []), res);
     if (!ins.children.length) grid.style.gridTemplateColumns = "1fr";
-    card.append(row, name, grid); list.append(card);
+    const extra = [];
+    if (r.prompt) {                    // Lip sync only: the prompt it was run with
+      const p = document.createElement("p"); p.className = "note prompt-text";
+      p.textContent = `Prompt: ${r.prompt}`; extra.push(p);
+    }
+    card.append(row, name, ...extra, grid); list.append(card);
   }
 }
 document.getElementById("hist-filter").addEventListener("change", renderHistory);

@@ -43,11 +43,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, workflow_settings
+from . import auth, pipelines, workflow_settings
 from .auth import User
 from .mp4 import faststart
 from .comfy_client import ComfyClient, ComfyError, ComfyTimeout
@@ -92,6 +92,9 @@ FREE_VRAM_SHARE = 0.85
 
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 VIDEO_EXT = {".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"}
+# Script pipelines whose main upload is audio (lipsync). ComfyUI tabs never use these.
+AUDIO_EXT = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
+MEDIA_EXT = {"video": VIDEO_EXT, "audio": AUDIO_EXT}
 
 
 # ── backends: which ComfyUI server runs which workflow on which GPU ──────────
@@ -142,6 +145,13 @@ def _load_backends() -> tuple[list[Backend], list[dict], str]:
 
 
 BACKENDS, GPU_INFO, BACKENDS_SOURCE = _load_backends()
+
+# Script pipelines (app/pipelines.py, workflows/pipelines.json): tabs whose
+# backend runs a script, not ComfyUI. They are added after the ComfyUI tabs are
+# built, so those are exactly as before; the new tabs join the same waiting
+# list and GPU workers. No pipelines.json = nothing added.
+ADAPTERS = {**ADAPTERS, **pipelines.ADAPTERS}
+BACKENDS += [Backend(a.backend, a.name, a.gpu, c) for a, c in pipelines.clients()]
 # Workflows that have at least one server: these get a tab. Catalog order.
 SERVICES = [n for n in ADAPTERS if any(b.workflow == n for b in BACKENDS)]
 BY_WORKFLOW = {n: [b for b in BACKENDS if b.workflow == n] for n in SERVICES}
@@ -183,6 +193,7 @@ class Job:
     backend: str | None = None  # server that ran it
     gpu: int | None = None
     dismissed: bool = False  # the user removed it from their job list
+    prompt: str | None = None  # script pipelines only (lipsync); None for ComfyUI tabs
 
     def public(self) -> dict:
         now = time.time()
@@ -563,8 +574,10 @@ def _execute(job: Job, backend: Backend) -> None:
         # decides length. Set MAX_FRAMES on a staging deployment to keep jobs short.
         cap = os.environ.get("MAX_FRAMES")
         job.settings = workflow_settings.overrides(job.service)
+        # Only script pipelines take a prompt; ComfyUI tabs are built exactly as before.
+        extra = {"prompt": job.prompt} if job.prompt is not None else {}
         workflow = adapter.build(
-            image_name, video_name, frame_cap=int(cap) if cap else None
+            image_name, video_name, frame_cap=int(cap) if cap else None, **extra
         )
         titles = client.node_titles(workflow)
 
@@ -635,7 +648,11 @@ def _keep_inputs(job: Job, trimmed: float = 0.0) -> None:
         (dest / f"{stem}__settings.json").write_text(
             json.dumps(job.settings, indent=2, ensure_ascii=False)
         )
-    for kind, src in (("image", job.image), ("video", job.video)):
+    if job.prompt is not None:  # script pipelines: the prompt, for History
+        (dest / f"{stem}__prompt.txt").write_text(job.prompt, encoding="utf-8")
+    # The main upload is saved as __audio.* for audio pipelines, __video.* otherwise.
+    media = getattr(ADAPTERS[job.service], "media", "video")
+    for kind, src in (("image", job.image), (media, job.video)):
         if src is None or not src.is_file():
             continue
         if kind == "video" and trimmed > 0:
@@ -754,6 +771,11 @@ def services(_: User = Depends(current_user)) -> dict:
                 "blurb": ADAPTERS[n].blurb,
                 "gallery_blurb": ADAPTERS[n].gallery_blurb,
                 "needs_image": ADAPTERS[n].needs_image,
+                # Script pipelines only; ComfyUI tabs get the defaults (video, no prompt).
+                "media": getattr(ADAPTERS[n], "media", "video"),
+                "needs_prompt": getattr(ADAPTERS[n], "needs_prompt", False),
+                "default_prompt": getattr(ADAPTERS[n], "default_prompt", ""),
+                "max_prompt_chars": getattr(ADAPTERS[n], "max_prompt_chars", 0),
                 "gpus": sorted(GPUS_FOR[n]),
                 "servers": len(BY_WORKFLOW[n]),
             }
@@ -835,6 +857,7 @@ def create_job(
     service: str,
     video: UploadFile = File(...),
     image: UploadFile | None = File(None),
+    prompt: str | None = Form(None),  # script pipelines only; ignored by ComfyUI tabs
     user: User = Depends(current_user),
 ) -> dict:
     if service not in SERVICES:
@@ -847,9 +870,20 @@ def create_job(
     needs_image = ADAPTERS[service].needs_image
     if needs_image and image is None:
         raise HTTPException(400, f"{_label(service)} needs a reference image.")
+    if getattr(ADAPTERS[service], "needs_prompt", False):
+        prompt = (prompt or "").strip()
+        limit = ADAPTERS[service].max_prompt_chars
+        if not prompt:
+            raise HTTPException(400, f"{_label(service)} needs a prompt.")
+        if limit and len(prompt) > limit:
+            raise HTTPException(400, f"The prompt is too long ({len(prompt)} characters, the limit is {limit}).")
+    else:
+        prompt = None
+    # The main upload is a video for ComfyUI tabs, audio for audio pipelines.
+    media = getattr(ADAPTERS[service], "media", "video")
     img = _save(image, IMAGE_EXT, "image") if needs_image else None
     try:
-        vid = _save(video, VIDEO_EXT, "video")
+        vid = _save(video, MEDIA_EXT[media], media)
     except HTTPException:
         if img:
             img.unlink(missing_ok=True)
@@ -873,6 +907,7 @@ def create_job(
             user_id=user.id,
             seq=next(_SEQ),
             created=time.time(),
+            prompt=prompt,
         )
         JOBS[job.id] = job
         LOCK.notify_all()  # wake the GPU workers
@@ -1035,6 +1070,15 @@ def history(user: User = Depends(current_user)) -> list[dict]:
                         row[f"{kind}_url"] = (
                             f"/api/history/{service}/" f"{quote(f.name)}/input/{kind}"
                         )
+                if service in pipelines.ADAPTERS:  # script pipelines: audio + prompt
+                    row["audio_url"], row["prompt"] = None, None
+                    if _history_input(service, f.stem, "audio", AUDIO_EXT):
+                        row["audio_url"] = (
+                            f"/api/history/{service}/{quote(f.name)}/input/audio"
+                        )
+                    p = INPUT_DIR / service / f"{f.stem}__prompt.txt"
+                    if p.is_file():
+                        row["prompt"] = p.read_text(encoding="utf-8", errors="replace")
                 rows.append(row)
     return sorted(rows, key=lambda r: r["finished"], reverse=True)
 
@@ -1063,13 +1107,12 @@ def history_input(
 ):
     if (
         service not in ADAPTERS
-        or kind not in ("image", "video")
+        or kind not in ("image", "video", "audio")
         or not auth.owns(user.id, service, name)
     ):
         raise HTTPException(404, "No such input.")
-    f = _history_input(
-        service, Path(name).stem, kind, IMAGE_EXT if kind == "image" else VIDEO_EXT
-    )
+    exts = {"image": IMAGE_EXT, "video": VIDEO_EXT, "audio": AUDIO_EXT}[kind]
+    f = _history_input(service, Path(name).stem, kind, exts)
     if f is None:
         raise HTTPException(404, "No such input.")
     return FileResponse(f, content_disposition_type="inline")
