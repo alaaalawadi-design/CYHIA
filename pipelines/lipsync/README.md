@@ -52,10 +52,11 @@ GPU 0 (as it does for Restore).
 
 ## Deploy (server .12)
 
-Check first (one-time; these could not be verified when this was written):
-- the network name: `docker network ls` should show `cy_hia_cyhia` (else set `CYHIA_NETWORK`);
-- `docker images scail-replace` exists (else set `LIPSYNC_IMAGE` to any Ubuntu 24.04 image on the machine);
-- `/home/administrator/Disk/alaa-work/longcat` runs on its own (conda-style env) and `LongCat-Video/weights` has no symlinks pointing outside the mounted folders.
+Verified on the server (2026-11-04): network `cy_hia_cyhia` exists, image
+`scail-replace:latest` is present, `administrator` is uid/gid 1000, the
+`longcat` env is a self-contained conda env, and `LongCat-Video/weights` has no
+symlinks. If any of these change, set `CYHIA_NETWORK`, `LIPSYNC_IMAGE` or
+`LIPSYNC_UID`/`LIPSYNC_GID`.
 
 Then, in the CYHIA folder with this branch checked out:
 
