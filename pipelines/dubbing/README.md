@@ -1,4 +1,4 @@
-# Dubbing tab (TBDub): a script pipeline
+# Video_Lipsync tab (internal name `dubbing`; TBDub): a script pipeline
 
 Video + dubbed speech audio → the same video with the speaker's lips re-synced
 to the new audio, as a CYHIA tab next to Lip sync. Built the same way as Lip

@@ -18,9 +18,9 @@
 
   "pipelines": {
     "lipsync": {
-      "label": "Lip sync",
+      "label": "Img-Lipsync",
       "blurb": "Makes the person in your image speak your audio, with accurate lip sync (LongCat-Video-Avatar 1.5). Upload a reference image and a speech audio file. It takes about 2 minutes of processing per second of audio.",
-      "gallery_blurb": "Examples of lip sync: the reference image and the result.",
+      "gallery_blurb": "Examples of image lip sync: the reference image and the talking video made from it.",
       "media": "audio",
       "needs_image": true,
       "needs_prompt": false,
@@ -49,9 +49,9 @@
     },
 
     "dubbing": {
-      "label": "Dubbing",
+      "label": "Video_Lipsync",
       "blurb": "Gives an existing video a new voice: the speaker's lips are re-synced to the audio you upload, while their face, motion and background stay the same (TBDub). Upload the video and the dubbed speech audio, each up to 30 minutes. In shots with several people, the one who is talking is found and dubbed.",
-      "gallery_blurb": "Examples of dubbing: the original video and the dubbed result.",
+      "gallery_blurb": "Examples of video lip sync: the original video and the result with the lips re-synced to the new audio.",
       "media": "video",
       "needs_image": false,
       "needs_audio": true,

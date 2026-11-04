@@ -1,4 +1,4 @@
-# Lip sync tab (LongCat-Video-Avatar 1.5): a script pipeline
+# Img-Lipsync tab (internal name `lipsync`; LongCat-Video-Avatar 1.5): a script pipeline
 
 Image + speech audio + prompt → talking video, as a CYHIA tab next to Replace,
 Animate and Restore. Users set only those three; every other setting is fixed in

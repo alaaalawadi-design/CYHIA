@@ -1473,7 +1473,9 @@ function renderHistory() {
     const lab = SERVICES[r.service]?.labels || {};   // per-tab captions (Dubbing); defaults otherwise
     const card = document.createElement("article"); card.className = "card case";
     const row = document.createElement("div"); row.className = "meta-row";
-    const b = document.createElement("span"); b.className = `badge ${r.service}`; b.textContent = r.service;
+    const b = document.createElement("span"); b.className = `badge ${r.service}`;
+    // Script-pipeline tabs show their tab name; the ComfyUI tabs keep the short key as before.
+    b.textContent = SERVICES[r.service]?.pipeline ? SERVICES[r.service].label : r.service;
     const when = document.createElement("span"); when.textContent = new Date(r.finished * 1000).toLocaleString();
     const size = document.createElement("span"); size.textContent = `${(r.size / 1048576).toFixed(1)} MB`;
     const dl = document.createElement("a"); dl.href = r.url; dl.download = r.name; dl.textContent = "Download";
