@@ -44,7 +44,7 @@
     },
     "restore": {
       "label": "Restore video",
-      "blurb": "Restores and sharpens a low-quality video (LTX 2.5). Upload a video only; no reference image is needed. The result keeps the original audio.",
+      "blurb": "Restores and sharpens a low-quality video. Upload a video only; no reference image is needed. The result keeps the original audio.",
       "gallery_blurb": "Examples of restoration: the original video next to the restored result.",
       "file": "restore_workflow.json",
       "nodes": {"video": "5060", "output": "5140", "frame_cap": "5060"},

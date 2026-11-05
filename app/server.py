@@ -172,6 +172,28 @@ def _label(service: str) -> str:
 
 
 # ── jobs ─────────────────────────────────────────────────────────────────────
+# Node titles are shown to users as the live stage; keep model names out of them.
+_STAGE_NAMES = [
+    (r"SCAIL.*(Infinity|window)|WanAnimateToVideo|Wan.*Animate", "Generating video"),
+    (r"Colored Mask", "Preparing mask"),
+    (r"SAM\s?3", "Tracking subject"),
+    (r"Qwen", "Analysing lighting"),
+    (r"Flux.*Prompt", "Analysing pose"),
+    (r"Empty Flux", "Preparing canvas"),
+    (r"LTXV.*(Decode)", "Decoding video"),
+    (r"LTXV.*Context", "Restoring video"),
+]
+_STAGE_SCRUB = re.compile(r"[\U0001F150-\U0001F1FF\U0001F3A5]+|\b(?:wan|ltxv?|scail-?\d*|flux ?\d*|klein|qwen\w*|sam ?\d|vitpose)\b", re.I)
+
+
+def _public_stage(title: str) -> str:
+    for pat, name in _STAGE_NAMES:
+        if re.search(pat, title, re.I):
+            return name
+    title = re.sub(r"dwpose", "Pose", title, flags=re.I)
+    return re.sub(r"\s+", " ", _STAGE_SCRUB.sub("", title)).strip(" -·") or "Working"
+
+
 @dataclass
 class Job:
     id: str
@@ -587,7 +609,7 @@ def _execute(job: Job, backend: Backend) -> None:
         def on_progress(p):
             # No honest overall fraction exists: the graph is ~100 nodes of very
             # uneven cost. Report the live stage; the page adds elapsed time.
-            job.stage = titles.get(p.node_id or "", "Working")
+            job.stage = _public_stage(titles.get(p.node_id or "", "Working"))
             job.step, job.steps = p.step, p.steps
 
         job.stage = "Submitting"
