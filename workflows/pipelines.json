@@ -22,8 +22,8 @@
       "label": "Img Lipsync",
       "blurb": "Makes the person in your image speak your audio, with accurate lip sync. Upload a reference image and a speech audio file.",
       "notes": [
-        "Each half minute of audio takes around 1 hour to process, so the longer the audio, the longer the wait.",
-        "Audio longer than 1 minute is cut at 1 minute."
+        "The whole audio is used, with no length limit. It is generated in segments of about 3 seconds, and each segment takes around 8 to 10 minutes.",
+        "For example: 30 seconds of audio takes around 1.5 hours, 1 minute around 3 hours, and 5 minutes around 15 hours."
       ],
       "gallery_blurb": "Examples of image lip sync: the reference image and the talking video made from it.",
       "media": "audio",
@@ -35,7 +35,6 @@
         "lora_multiplier": 0.45,
         "resolution": "720p",
         "seed": 42,
-        "max_seconds": 60,
         "no_segments": true
       },
       "stages": {
@@ -46,7 +45,7 @@
         "save": "Saving video"
       },
       "prefix": "Cy_LipSync",
-      "timeout_hours": 4,
+      "timeout_hours": 72,
       "free_after_run": true,
       "gpu": 0,
       "backend": "comfy-lipsync",

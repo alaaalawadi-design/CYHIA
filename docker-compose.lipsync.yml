@@ -60,7 +60,7 @@ services:
       LIPSYNC_PORT: "8138"
       LIPSYNC_DATA: /data
       LIPSYNC_SCRIPT: ${LONGCAT_ROOT:-/home/administrator/Disk/alaa-work/LongCat-Video}/run_avatar.sh
-      LIPSYNC_MAX_HOURS: "6"
+      LIPSYNC_MAX_HOURS: "72"   # no audio limit: long audio can run many hours
 
     entrypoint:
       - ${LONGCAT_ENV:-/home/administrator/Disk/alaa-work/longcat}/bin/python

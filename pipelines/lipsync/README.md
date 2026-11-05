@@ -81,6 +81,8 @@ Without `workflows/pipelines.json` the UI has no Lip sync tab and runs exactly a
 
 ## Timing and limits
 
-About 6–10 min per 93-frame segment (~3.2 s of video) at 720p: a 35 s clip took
-~70 min. `args.max_seconds` (60) caps the audio used; `timeout_hours` (4) is the
-UI's limit per job, after which the worker is told to stop the script.
+About 8–10 min per segment (the first is 93 frames = 3.72 s, then 80 frames =
+3.2 s each, at 25 fps) at 720p: 20 s of audio took 59 min, 35 s ~70 min. There is
+no audio length limit: the whole audio is used (`args.max_seconds` is not set).
+`timeout_hours` (72) in pipelines.json and `LIPSYNC_MAX_HOURS` (72) in
+docker-compose.lipsync.yml only stop a job that hangs.
