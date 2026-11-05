@@ -467,6 +467,47 @@ def _duration(path: Path) -> float | None:
         return None
 
 
+def _uses_video_audio(adapter: Adapter) -> bool:
+    """True if some node reads the driving video's audio output (VHS output 2)."""
+    try:
+        wf = adapter.load()
+    except Exception:  # noqa: BLE001
+        return False
+    for node in wf.values():
+        for v in (node.get("inputs") or {}).values():
+            if isinstance(v, list) and len(v) == 2 and str(v[0]) == adapter.video_node and v[1] == 2:
+                return True
+    return False
+
+
+def _ensure_audio(path: Path) -> None:
+    """
+    VHS_LoadVideo fails ("Output file does not contain any stream") when asked
+    for the audio of a video that has none. Give such a video a silent track
+    (video stream copied, so this is fast). Never fails a job: on any error the
+    original file is left as it was.
+    """
+    try:
+        has_audio = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+             "stream=index", "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True, check=True, timeout=60,
+        ).stdout.strip()
+        if has_audio:
+            return
+        tmp = path.with_name(path.stem + ".silent" + path.suffix)
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-i", str(path),
+             "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac",
+             "-shortest", "-movflags", "+faststart", str(tmp)],
+            capture_output=True, check=True, timeout=300,
+        )
+        tmp.replace(path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"could not add silent audio to {path.name}: {exc}")
+
+
 def _fps(path: Path) -> float | None:
     """Frame rate of the first video stream, or None if ffprobe cannot tell."""
     try:
@@ -584,6 +625,8 @@ def _execute(job: Job, backend: Backend) -> None:
 
         job.stage = "Uploading inputs"
         image_name = client.upload(job.image) if adapter.needs_image else None
+        if _uses_video_audio(adapter):
+            _ensure_audio(job.video)
         video_name = client.upload(job.video)
 
         # Unset in production: the workflow's own cap (1040 frames for replace)
