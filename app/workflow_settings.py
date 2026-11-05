@@ -38,6 +38,7 @@ SAMPLERS = [
     "euler", "euler_ancestral", "heun", "dpm_2", "lms", "dpmpp_2s_ancestral",
     "dpmpp_sde", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_3m_sde", "ddpm", "lcm",
     "ipndm", "deis", "res_multistep", "uni_pc", "uni_pc_bh2",
+    "euler_ancestral_cfg_pp", "euler_cfg_pp",
 ]
 SCHEDULERS = [
     "simple", "sgm_uniform", "karras", "exponential", "ddim_uniform", "beta",
@@ -156,7 +157,61 @@ REPLACE_CONTROLS: list[Control] = [
             help="Lower is better quality and a larger file."),
 ]
 
-CONTROLS: dict[str, list[Control]] = {"replace": REPLACE_CONTROLS}
+# ── animate (WAN 2.2 Animate) ────────────────────────────────────────────────
+G_A_INPUT = "Driving video"
+G_A_PROMPT = "Prompts"
+G_A_SAMPLE = "Sampling"
+G_A_LORA = "LoRAs"
+
+ANIMATE_CONTROLS: list[Control] = [
+    Control("417", "frame_load_cap", "Max frames", G_A_INPUT, "int", 1, 1000, 1,
+            help="Frames read from the driving video at 24 fps."),
+    Control("417", "skip_first_frames", "Skip first frames", G_A_INPUT, "int", 0, 100000, 1),
+    Control("227", "text", "Positive prompt", G_A_PROMPT, "text"),
+    Control("228", "text", "Negative prompt", G_A_PROMPT, "text"),
+    *_sampler("324", G_A_SAMPLE, steps_max=50),
+    Control("255", "shift", "Sampling shift", G_A_SAMPLE, "float", 0, 20, 0.1),
+    Control("314", "strength_model", "LightX2V low-noise LoRA", G_A_LORA, "float", 0, 2, 0.05),
+    Control("463", "strength_model", "LightX2V 480p step-distill LoRA", G_A_LORA, "float", 0, 2, 0.05),
+    Control("315", "strength_model", "Animate relight LoRA", G_A_LORA, "float", 0, 2, 0.05),
+    Control("462", "crf", "Video quality (CRF)", "Output", "int", 0, 51, 1,
+            help="Lower is better quality and a larger file."),
+]
+
+# ── restore (LTX 2.5) ────────────────────────────────────────────────────────
+G_R_INPUT = "Source video"
+G_R_PROMPT = "Prompts"
+G_R_SAMPLE = "Sampling"
+G_R_LORA = "LoRAs"
+G_R_RES = "Resolution and windows"
+
+RESTORE_CONTROLS: list[Control] = [
+    Control("5060", "frame_load_cap", "Max frames", G_R_INPUT, "int", 0, 100000, 1,
+            help="Frames read at 30 fps. 0 means the whole video."),
+    Control("5060", "skip_first_frames", "Skip first frames", G_R_INPUT, "int", 0, 100000, 1),
+    Control("2483", "text", "Positive prompt", G_R_PROMPT, "text"),
+    Control("2612", "text", "Negative prompt", G_R_PROMPT, "text"),
+    Control("4832", "noise_seed", "Seed", G_R_SAMPLE, "int", 0, SEED_MAX, 1,
+            help="Fixed seed. Change it for a different take on the same video."),
+    Control("4828", "cfg", "CFG", G_R_SAMPLE, "float", 0, 20, 0.1),
+    Control("4831", "sampler_name", "Sampler", G_R_SAMPLE, "choice", choices=SAMPLERS),
+    Control("5025", "sigmas", "Sigmas", G_R_SAMPLE, "text",
+            help="Comma-separated noise levels, one per step plus the final 0."),
+    Control("4922", "strength_model", "Distilled LoRA", G_R_LORA, "float", 0, 2, 0.05),
+    Control("5120", "strength_model", "CQ enhancer LoRA", G_R_LORA, "float", 0, 2, 0.05),
+    Control("5026", "resize_type.shorter_size", "Short side (px)", G_R_RES, "int", 128, 2160, 1,
+            help="The video is scaled so its shorter side is this, then rounded to a multiple of 64. "
+                 "Time and VRAM grow with it."),
+    Control("5132", "context_length", "Context window length", G_R_RES, "int", 9, 1000, 1),
+    Control("5132", "context_overlap", "Context window overlap", G_R_RES, "int", 0, 200, 1),
+    Control("5140", "bitrate", "Output bitrate (Mbit/s)", "Output", "int", 1, 100, 1),
+]
+
+CONTROLS: dict[str, list[Control]] = {
+    "replace": REPLACE_CONTROLS,
+    "animate": ANIMATE_CONTROLS,
+    "restore": RESTORE_CONTROLS,
+}
 
 _LOCK = threading.Lock()
 

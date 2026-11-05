@@ -37,7 +37,17 @@
       var(--bg);
     background-attachment: fixed;
   }
-  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 120px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 60px; }
+  .model { margin: 0 0 22px; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--panel-2); }
+  .model > summary {
+    list-style: none; cursor: pointer; padding: 16px 22px; display: flex; align-items: center; gap: 12px;
+    font-size: 20px; font-weight: 700; letter-spacing: -.01em;
+  }
+  .model > summary::-webkit-details-marker { display: none; }
+  .model > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+  .model[open] > summary::before { transform: rotate(90deg); }
+  .model > summary .count { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--mod); background: var(--mod-bg); border-radius: 999px; padding: 2px 10px; }
+  .model-body { padding: 0 18px 18px; }
   header.brand {
     display: flex; align-items: center; gap: 16px; margin: 0 0 28px; padding: 10px 22px;
     background: var(--nav-bg); border: 1px solid var(--line); border-radius: 999px;
@@ -97,8 +107,8 @@
   .switch { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 0; }
 
   .bar {
-    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 10;
-    width: min(1068px, calc(100% - 32px)); display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    position: sticky; bottom: 16px; z-index: 10; margin-top: 8px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
     padding: 10px 14px; background: var(--nav-bg); border: 1px solid var(--line-strong); border-radius: 14px;
     backdrop-filter: saturate(160%) blur(18px); box-shadow: var(--shadow);
   }
@@ -126,27 +136,14 @@
       <a class="pill" href="/">Back to app</a><button class="pill" type="button" id="logout">Sign out</button></div>
   </header>
 
-  <h1 id="title">Workflow controls</h1>
-  <p class="lede">Settings for the workflow, apart from the input image and video. Changes apply to every job that
-    <em>starts</em> after you save, for all users. Controls you leave unchanged run exactly as saved in the workflow JSON.</p>
-  <p class="meta" id="meta"></p>
+  <h1>Workflow controls</h1>
+  <p class="lede">Settings for each model's workflow, apart from the input image and video. Changes apply to every job that
+    <em>starts</em> after you save, for all users. Controls you leave unchanged run exactly as saved in the workflow JSON.
+    Each model has its own section and is saved separately.</p>
 
   <div class="error" id="load-err" hidden></div>
-
-  <div class="toolbar" id="toolbar" hidden>
-    <select id="service" class="search" style="flex:0 1 220px" hidden></select>
-    <input class="search" id="filter" type="search" placeholder="Filter controls (name, node id, prompt text)…">
-    <label class="toggle"><input type="checkbox" id="only-mod"> Changed only</label>
-  </div>
-  <div id="groups"></div>
+  <div id="models"></div>
 </main>
-
-<div class="bar" id="bar" hidden>
-  <span class="state" id="state">No unsaved changes</span>
-  <button class="btn" type="button" id="reset-all" title="Remove every override for this workflow">Reset all to workflow</button>
-  <button class="btn" type="button" id="discard" disabled>Discard</button>
-  <button class="btn primary" type="button" id="save" disabled>Save</button>
-</div>
 
 <script>
 "use strict";
@@ -156,8 +153,6 @@ const el = (tag, props = {}, ...kids) => {
   for (const k of kids) if (k != null) e.append(k);
   return e;
 };
-
-let service = null, view = null, draft = {};   // draft: key -> value currently in the form
 
 async function api(path, opts = {}) {
   const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -169,7 +164,6 @@ async function api(path, opts = {}) {
 }
 
 const same = (a, b) => a === b || (typeof a === "number" && typeof b === "number" && Math.abs(a - b) < 1e-9);
-const changes = () => view.controls.filter(c => !same(draft[c.key], c.value));
 
 function fmt(v) {
   if (typeof v === "boolean") return v ? "on" : "off";
@@ -177,153 +171,171 @@ function fmt(v) {
   return String(v);
 }
 
-function input(c) {
-  const v = draft[c.key];
-  let e;
-  if (c.type === "text") {
-    e = el("textarea", { value: v ?? "", rows: Math.min(8, Math.max(2, Math.ceil(String(v ?? "").length / 110))) });
-  } else if (c.type === "choice") {
-    e = el("select");
-    for (const o of c.choices) e.append(el("option", { value: o, textContent: o, selected: o === v }));
-    if (!c.choices.includes(v)) e.prepend(el("option", { value: v, textContent: `${v} (not offered)`, selected: true }));
-  } else if (c.type === "bool") {
-    e = el("input", { type: "checkbox", checked: !!v });
-  } else {
-    e = el("input", { type: "number", value: v ?? "", inputMode: c.type === "int" ? "numeric" : "decimal" });
-    if (c.min != null) e.min = c.min;
-    if (c.max != null) e.max = c.max;
-    e.step = c.step ?? "any";
-  }
-  e.id = `f-${c.key}`;
-  const read = () => {
-    if (c.type === "bool") return e.checked;
-    if (c.type === "int") return e.value === "" ? null : Number(e.value);
-    if (c.type === "float") return e.value === "" ? null : parseFloat(e.value);
-    return e.value;
-  };
-  e.addEventListener("input", () => { draft[c.key] = read(); mark(c); refreshBar(); });
-  e.addEventListener("change", () => { draft[c.key] = read(); mark(c); refreshBar(); });
-  return e;
-}
+const panels = [];
 
-function mark(c) {
-  const f = document.querySelector(`[data-key="${CSS.escape(c.key)}"]`);
-  if (!f) return;
-  const differs = !same(draft[c.key], c.default);
-  f.classList.toggle("mod", differs);
-  f.classList.toggle("dirty", !same(draft[c.key], c.value));
-  f.querySelector(".undo").hidden = !differs;
-  const g = f.closest("details"), n = g.querySelectorAll(".field.mod").length;
-  g.querySelector(".count").hidden = !n;
-  g.querySelector(".count").textContent = `${n} changed`;
-}
+// One panel per model: its own view, draft, filter and save bar.
+function Panel(service, label) {
+  let view = null, draft = {};
+  const id = k => `f-${service}-${k}`;
+  const root = el("details", { className: "model" });
+  const count = el("span", { className: "count", hidden: true });
+  root.append(el("summary", {}, label, count));
+  const meta = el("p", { className: "meta" });
+  const filter = el("input", { className: "search", type: "search", placeholder: "Filter controls (name, node id, prompt text)…" });
+  const onlyMod = el("input", { type: "checkbox" });
+  const toolbar = el("div", { className: "toolbar" }, filter, el("label", { className: "toggle" }, onlyMod, " Changed only"));
+  const groups = el("div");
+  const state = el("span", { className: "state", textContent: "No unsaved changes" });
+  const resetAll = el("button", { className: "btn", type: "button", textContent: "Reset all to workflow", title: "Remove every override for this workflow" });
+  const discard = el("button", { className: "btn", type: "button", textContent: "Discard", disabled: true });
+  const save = el("button", { className: "btn primary", type: "button", textContent: "Save", disabled: true });
+  const bar = el("div", { className: "bar" }, state, resetAll, discard, save);
+  const errBox = el("div", { className: "error", hidden: true });
+  root.append(el("div", { className: "model-body" }, errBox, meta, toolbar, groups, bar));
 
-function render() {
-  const root = $("groups");
-  const open = new Set([...root.querySelectorAll("details[open]")].map(d => d.dataset.group));
-  root.replaceChildren();
-  const groups = new Map();
-  for (const c of view.controls) (groups.get(c.group) || groups.set(c.group, []).get(c.group)).push(c);
-  for (const [name, list] of groups) {
-    const d = el("details", { className: "group", open: open.size ? open.has(name) : true });
-    d.dataset.group = name;
-    d.append(el("summary", {}, name, el("span", { className: "count", hidden: true })));
-    const box = el("div", { className: "fields" });
-    for (const c of list) {
-      const f = el("div", { className: `field${c.type === "text" ? " wide" : ""}` });
-      f.dataset.key = c.key;
-      f.dataset.search = `${c.label} ${c.key} ${c.title} ${name} ${typeof c.value === "string" ? c.value : ""}`.toLowerCase();
-      const undo = el("button", { type: "button", className: "undo", textContent: "use workflow value", hidden: true });
-      undo.addEventListener("click", () => { draft[c.key] = c.default; render(); refreshBar(); });
-      f.append(
-        el("div", { className: "top" },
-          el("label", { htmlFor: `f-${c.key}`, textContent: c.label }),
-          el("span", { className: "node", textContent: `#${c.node}${c.title ? " · " + c.title : ""} · ${c.input}`, title: `${c.title} — node ${c.node}, input ${c.input}` }),
-          undo),
-        c.type === "bool"
-          ? el("label", { className: "switch" }, input(c), c.label)
-          : input(c),
-        c.help ? el("p", { className: "help", textContent: c.help }) : null,
-        el("p", { className: "def", textContent: `Workflow value: ${fmt(c.default)}` }),
-      );
-      box.append(f);
+  const changes = () => view.controls.filter(c => !same(draft[c.key], c.value));
+  const setState = (t, cls = "") => { state.textContent = t; state.className = `state ${cls}`; };
+
+  function input(c) {
+    const v = draft[c.key];
+    let e;
+    if (c.type === "text") {
+      e = el("textarea", { value: v ?? "", rows: Math.min(8, Math.max(2, Math.ceil(String(v ?? "").length / 110))) });
+    } else if (c.type === "choice") {
+      e = el("select");
+      for (const o of c.choices) e.append(el("option", { value: o, textContent: o, selected: o === v }));
+      if (!c.choices.includes(v)) e.prepend(el("option", { value: v, textContent: `${v} (not offered)`, selected: true }));
+    } else if (c.type === "bool") {
+      e = el("input", { type: "checkbox", checked: !!v });
+    } else {
+      e = el("input", { type: "number", value: v ?? "", inputMode: c.type === "int" ? "numeric" : "decimal" });
+      if (c.min != null) e.min = c.min;
+      if (c.max != null) e.max = c.max;
+      e.step = c.step ?? "any";
     }
-    d.append(box);
-    root.append(d);
-    for (const c of list) mark(c);
+    e.id = id(c.key);
+    const read = () => {
+      if (c.type === "bool") return e.checked;
+      if (c.type === "int") return e.value === "" ? null : Number(e.value);
+      if (c.type === "float") return e.value === "" ? null : parseFloat(e.value);
+      return e.value;
+    };
+    const upd = () => { draft[c.key] = read(); mark(c); refreshBar(); };
+    e.addEventListener("input", upd);
+    e.addEventListener("change", upd);
+    return e;
   }
-  applyFilter();
-}
 
-function applyFilter() {
-  const q = $("filter").value.trim().toLowerCase(), only = $("only-mod").checked;
-  for (const d of $("groups").children) {
-    let shown = 0;
-    for (const f of d.querySelectorAll(".field")) {
-      const ok = (!q || f.dataset.search.includes(q)) && (!only || f.classList.contains("mod"));
-      f.hidden = !ok; shown += ok;
+  function mark(c) {
+    const f = groups.querySelector(`[data-key="${CSS.escape(c.key)}"]`);
+    if (!f) return;
+    const differs = !same(draft[c.key], c.default);
+    f.classList.toggle("mod", differs);
+    f.classList.toggle("dirty", !same(draft[c.key], c.value));
+    f.querySelector(".undo").hidden = !differs;
+    const g = f.closest("details"), n = g.querySelectorAll(".field.mod").length;
+    const gc = g.querySelector(".count");
+    gc.hidden = !n; gc.textContent = `${n} changed`;
+    const total = view.controls.filter(x => !same(draft[x.key], x.default)).length;
+    count.hidden = !total; count.textContent = `${total} changed`;
+  }
+
+  function render() {
+    const open = new Set([...groups.querySelectorAll("details[open]")].map(d => d.dataset.group));
+    groups.replaceChildren();
+    const by = new Map();
+    for (const c of view.controls) (by.get(c.group) || by.set(c.group, []).get(c.group)).push(c);
+    for (const [name, list] of by) {
+      const d = el("details", { className: "group", open: open.size ? open.has(name) : true });
+      d.dataset.group = name;
+      d.append(el("summary", {}, name, el("span", { className: "count", hidden: true })));
+      const box = el("div", { className: "fields" });
+      for (const c of list) {
+        const f = el("div", { className: `field${c.type === "text" ? " wide" : ""}` });
+        f.dataset.key = c.key;
+        f.dataset.search = `${c.label} ${c.key} ${c.title} ${name} ${typeof c.value === "string" ? c.value : ""}`.toLowerCase();
+        const undo = el("button", { type: "button", className: "undo", textContent: "use workflow value", hidden: true });
+        undo.addEventListener("click", () => { draft[c.key] = c.default; render(); refreshBar(); });
+        f.append(
+          el("div", { className: "top" },
+            el("label", { htmlFor: id(c.key), textContent: c.label }),
+            el("span", { className: "node", textContent: `#${c.node}${c.title ? " · " + c.title : ""} · ${c.input}`, title: `${c.title} — node ${c.node}, input ${c.input}` }),
+            undo),
+          c.type === "bool" ? el("label", { className: "switch" }, input(c), c.label) : input(c),
+          c.help ? el("p", { className: "help", textContent: c.help }) : null,
+          el("p", { className: "def", textContent: `Workflow value: ${fmt(c.default)}` }),
+        );
+        box.append(f);
+      }
+      d.append(box);
+      groups.append(d);
+      for (const c of list) mark(c);
     }
-    d.hidden = !shown;
-    if (q || only) d.open = shown > 0;
+    applyFilter();
   }
-}
-$("filter").addEventListener("input", applyFilter);
-$("only-mod").addEventListener("change", applyFilter);
 
-function setState(text, cls = "") { $("state").textContent = text; $("state").className = `state ${cls}`; }
-
-function refreshBar() {
-  const n = changes().length;
-  $("save").disabled = $("discard").disabled = !n;
-  setState(n ? `${n} unsaved change${n > 1 ? "s" : ""}` : "No unsaved changes");
-  $("reset-all").disabled = !view.controls.some(c => c.modified);
-}
-
-function showMeta() {
-  const mods = view.controls.filter(c => c.modified).length;
-  const when = view.updated ? new Date(view.updated * 1000).toLocaleString() : null;
-  $("meta").textContent = `${view.label} · ${view.controls.length} controls · ${mods} differ from the workflow` +
-    (when ? ` · last saved ${when}${view.updated_by ? " by " + view.updated_by : ""}` : "");
-}
-
-function load(v) {
-  view = v;
-  draft = Object.fromEntries(v.controls.map(c => [c.key, c.value]));
-  $("title").textContent = `Workflow controls — ${v.label}`;
-  showMeta(); render(); refreshBar();
-  $("toolbar").hidden = $("bar").hidden = false;
-}
-
-async function open(s) {
-  service = s;
-  try { load(await api(`/api/admin/workflows/${s}`)); }
-  catch (e) { $("load-err").textContent = `Could not load the controls: ${e.message}`; $("load-err").hidden = false; }
-}
-
-$("save").addEventListener("click", async () => {
-  const bad = view.controls.find(c => draft[c.key] === null || Number.isNaN(draft[c.key]));
-  if (bad) return setState(`${bad.label}: enter a value.`, "err");
-  $("save").disabled = true;
-  setState("Saving…");
-  try {
-    // Send the full set: anything equal to the workflow value is dropped server-side.
-    const values = Object.fromEntries(view.controls.filter(c => !same(draft[c.key], c.default)).map(c => [c.key, draft[c.key]]));
-    load(await api(`/api/admin/workflows/${service}`, { method: "PUT", body: JSON.stringify({ values }) }));
-    setState("Saved. New jobs will use these settings.", "ok");
-  } catch (e) {
-    setState(e.message, "err");
-    $("save").disabled = false;
+  function applyFilter() {
+    const q = filter.value.trim().toLowerCase(), only = onlyMod.checked;
+    for (const d of groups.children) {
+      let shown = 0;
+      for (const f of d.querySelectorAll(".field")) {
+        const ok = (!q || f.dataset.search.includes(q)) && (!only || f.classList.contains("mod"));
+        f.hidden = !ok; shown += ok;
+      }
+      d.hidden = !shown;
+      if (q || only) d.open = shown > 0;
+    }
   }
-});
-$("discard").addEventListener("click", () => load(view));
-$("reset-all").addEventListener("click", async () => {
-  if (!confirm("Remove every change and run the workflow exactly as saved in its JSON?")) return;
-  try {
-    load(await api(`/api/admin/workflows/${service}`, { method: "DELETE" }));
-    setState("All controls reset to the workflow values.", "ok");
-  } catch (e) { setState(e.message, "err"); }
-});
-window.addEventListener("beforeunload", e => { if (view && changes().length) { e.preventDefault(); e.returnValue = ""; } });
+  filter.addEventListener("input", applyFilter);
+  onlyMod.addEventListener("change", applyFilter);
+
+  function refreshBar() {
+    const n = changes().length;
+    save.disabled = discard.disabled = !n;
+    setState(n ? `${n} unsaved change${n > 1 ? "s" : ""}` : "No unsaved changes");
+    resetAll.disabled = !view.controls.some(c => c.modified);
+  }
+
+  function load(v) {
+    view = v;
+    draft = Object.fromEntries(v.controls.map(c => [c.key, c.value]));
+    const mods = v.controls.filter(c => c.modified).length;
+    const when = v.updated ? new Date(v.updated * 1000).toLocaleString() : null;
+    meta.textContent = `${v.controls.length} controls · ${mods} differ from the workflow` +
+      (when ? ` · last saved ${when}${v.updated_by ? " by " + v.updated_by : ""}` : "");
+    render(); refreshBar();
+  }
+
+  save.addEventListener("click", async () => {
+    const bad = view.controls.find(c => draft[c.key] === null || Number.isNaN(draft[c.key]));
+    if (bad) return setState(`${bad.label}: enter a value.`, "err");
+    save.disabled = true;
+    setState("Saving…");
+    try {
+      // Anything equal to the workflow value is dropped server-side.
+      const values = Object.fromEntries(view.controls.filter(c => !same(draft[c.key], c.default)).map(c => [c.key, draft[c.key]]));
+      load(await api(`/api/admin/workflows/${service}`, { method: "PUT", body: JSON.stringify({ values }) }));
+      setState("Saved. New jobs will use these settings.", "ok");
+    } catch (e) { setState(e.message, "err"); save.disabled = false; }
+  });
+  discard.addEventListener("click", () => load(view));
+  resetAll.addEventListener("click", async () => {
+    if (!confirm(`Remove every change and run ${label} exactly as saved in its JSON?`)) return;
+    try {
+      load(await api(`/api/admin/workflows/${service}`, { method: "DELETE" }));
+      setState("All controls reset to the workflow values.", "ok");
+    } catch (e) { setState(e.message, "err"); }
+  });
+
+  const p = { root, dirty: () => !!view && changes().length > 0 };
+  api(`/api/admin/workflows/${service}`).then(load).catch(e => {
+    errBox.textContent = `Could not load the controls: ${e.message}`; errBox.hidden = false;
+    toolbar.hidden = bar.hidden = true;
+  });
+  return p;
+}
+
+window.addEventListener("beforeunload", e => { if (panels.some(p => p.dirty())) { e.preventDefault(); e.returnValue = ""; } });
 
 $("logout").addEventListener("click", async () => {
   try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
@@ -335,15 +347,12 @@ $("logout").addEventListener("click", async () => {
     const me = await api("/api/auth/me");
     $("who-name").textContent = me.username;
     const list = await api("/api/admin/workflows");
-    if (list.length > 1) {
-      for (const w of list) $("service").append(el("option", { value: w.service, textContent: w.label }));
-      $("service").hidden = false;
-      $("service").addEventListener("change", () => {
-        if (view && changes().length && !confirm("Discard unsaved changes?")) { $("service").value = service; return; }
-        open($("service").value);
-      });
+    for (const w of list) {
+      const p = Panel(w.service, w.label);
+      panels.push(p);
+      $("models").append(p.root);
     }
-    if (list.length) await open(list[0].service);
+    if (panels.length) panels[0].root.open = true;
   } catch (e) {
     $("load-err").textContent = e.message; $("load-err").hidden = false;
   }
