@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CYHIA — Admin</title>
+<title>GenVision Lab — Admin</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2718%27 fill=%27%23ffffff%27/%3E%3Cpath d=%27M50 20L24 50l26 30h12L36 50l26-30z%27 fill=%27%233a59d9%27/%3E%3C/svg%3E">
 <style>
   /* Same tokens as index.html. No web font, nothing from a CDN. */
@@ -114,17 +114,14 @@
   .btn.primary:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-text); }
   .btn:disabled { opacity: .45; cursor: default; }
   .error { background: var(--err-bg); color: var(--bad); border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; }
+  img.brand-logo { height: 44px; width: auto; display: block; flex: none; }
+  @media (prefers-color-scheme: dark) { img.brand-logo { background: #fff; border-radius: 10px; padding: 3px 10px; } }
 </style>
 </head>
 <body>
 <main>
   <header class="brand">
-    <svg viewBox="0 0 560 120" role="img" aria-label="CYHIA — Human Image Animation">
-      <path d="M40 16 L14 60 L40 104 L58 104 L32 60 L58 16Z" fill="#bc0424"/>
-      <path d="M62 8 L30 60 L62 112 L86 112 L54 60 L86 8Z" fill="#3a59d9"/>
-      <text x="104" y="84" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="800" font-size="84" letter-spacing="2" fill="var(--wordmark)">CYHIA</text>
-      <text x="108" y="112" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="600" font-size="15" letter-spacing="4.5" fill="var(--muted)">HUMAN IMAGE ANIMATION</text>
-    </svg>
+    <img class="brand-logo" src="/static/logo.png" alt="GenVision Lab — Generative Vision Laboratory">
     <div class="who"><span class="as">Admin</span><b id="who-name"></b>
       <a class="pill" href="/">Back to app</a><button class="pill" type="button" id="logout">Sign out</button></div>
   </header>

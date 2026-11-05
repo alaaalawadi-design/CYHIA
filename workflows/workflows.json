@@ -49,6 +49,7 @@
       "file": "restore_workflow.json",
       "nodes": {"video": "5060", "output": "5140", "frame_cap": "5060"},
       "prefix": "Cy_Restore",
+      "labels": {"video": "Original", "result": "Restored"},
       "timeout_hours": 3,
       "trim_frames": 0,
       "free_after_run": true,

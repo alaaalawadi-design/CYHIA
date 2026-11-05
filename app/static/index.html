@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CYHIA — Human Image Animation</title>
+<title>GenVision Lab</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2718%27 fill=%27%23ffffff%27/%3E%3Cpath d=%27M50 20L24 50l26 30h12L36 50l26-30z%27 fill=%27%233a59d9%27/%3E%3C/svg%3E">
 <style>
   /* Tokens taken from cywaf.com (Cyshield brand): blue #1C1998, red #BC0424, light surfaces,
@@ -318,6 +318,15 @@
     border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; background: var(--panel);
   }
   .doc-toc a:hover { color: var(--accent); border-color: var(--line-strong); }
+  .doc-fold { margin-top: 26px; scroll-margin-top: 16px; }
+  .doc-group { cursor: pointer; list-style: none; position: relative; padding-right: 28px; }
+  .doc-group::-webkit-details-marker { display: none; }
+  .doc-group::after { content: "▾"; position: absolute; right: 4px; top: 6px; color: var(--accent); font-size: 18px; transition: transform .15s; }
+  .doc-fold:not([open]) > .doc-group::after { transform: rotate(-90deg); }
+  .doc-group { margin: 0 0 14px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); scroll-margin-top: 16px; }
+  .doc-group h2 { font-size: 24px; letter-spacing: -.01em; margin: 0 0 4px; }
+  .doc-group p { margin: 0; color: var(--muted); font-size: 14px; max-width: 78ch; }
+  .doc-toc a.doc-group-link { font-weight: 700; }
   .doc-sec { margin-bottom: 20px; scroll-margin-top: 16px; }
   .doc-kicker { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
   .doc-sec > h3 { font-size: 19px; letter-spacing: -.01em; margin: 0 0 8px; }
@@ -333,23 +342,20 @@
   .doc-media .res .stack { display: grid; gap: 10px; }
   .doc-foot { color: var(--muted); font-size: 13px; margin: 24px 0 0; max-width: 78ch; }
   [hidden] { display: none !important; }
+  img.brand-logo { height: 48px; width: auto; display: block; flex: none; }
+  @media (prefers-color-scheme: dark) { img.brand-logo { background: #fff; border-radius: 10px; padding: 3px 10px; } }
 </style>
 </head>
 <body>
 <main>
   <header class="brand">
-    <svg viewBox="0 0 560 120" role="img" aria-label="CYHIA — Human Image Animation">
-      <path d="M40 16 L14 60 L40 104 L58 104 L32 60 L58 16Z" fill="#bc0424"/>
-      <path d="M62 8 L30 60 L62 112 L86 112 L54 60 L86 8Z" fill="#3a59d9"/>
-      <text x="104" y="84" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="800" font-size="84" letter-spacing="2" fill="var(--wordmark)">CYHIA</text>
-      <text x="108" y="112" font-family="system-ui,'Segoe UI',Arial,sans-serif" font-weight="600" font-size="15" letter-spacing="4.5" fill="var(--muted)">HUMAN IMAGE ANIMATION</text>
-    </svg>
+    <img class="brand-logo" src="/static/logo.png" alt="GenVision Lab — Generative Vision Laboratory">
     <div class="who" id="who" hidden><span class="as">Signed in as</span><b id="who-name"></b><a id="admin-link" href="/admin" hidden>Admin</a><button type="button" id="logout">Sign out</button></div>
   </header>
 
   <section class="hero">
-    <h1>Human image animation, <span>from a single image.</span></h1>
-    <p>Replace a character in a video, or animate a still image from a driving video.</p>
+    <h1>Generative video tools, <span>in one place.</span></h1>
+    <p>GenVision Lab brings our AI image and video models together in one portal: replace a character in a video, animate a still image, or restore low-quality footage. Pick a tool below.</p>
   </section>
 
   <!-- One tab per workflow is added in front of History from /api/services. -->
@@ -1202,18 +1208,24 @@ const M = {
 };
 
 const DOCS = [
-  { id: "doc-overview", kicker: "Overview", title: "What these two models do", nav: "Overview",
+  { id: "doc-overview", kicker: "Overview", title: "Welcome to GenVision Lab", nav: "Overview",
+    lead: "GenVision Lab is our portal for generative image and video models. Each model has its own tab; " +
+          "this page documents what each one does, how to prepare inputs, and what to expect.",
     points: [
-      "Replacement puts the character from your reference image into an existing video, keeping that video's motion, scene and audio.",
-      "Animation drives the character in your reference image with the motion of a driving video; the driving video's background is not carried over.",
-      "Everything below is a quality recommendation derived from evaluation runs, not an acceptance rule enforced by the service.",
+      "Replace character puts the character from your reference image into an existing video, keeping that video's motion, scene and audio.",
+      "Animate drives the character in your reference image with the motion of a driving video; the driving video's background is not carried over.",
+      "Restore video cleans up and sharpens a low-quality video, keeping its original audio. It needs no reference image.",
+      "Jobs from every tab share one queue and run in submission order. Your finished results are kept in History, and you can only see your own.",
+      "Below, each tab has its own collapsible section. Everything there is a quality recommendation derived from evaluation runs, not an acceptance rule enforced by the service.",
     ] },
 
-  { id: "doc-criteria", kicker: "Input guide", title: "How to choose your image and video", nav: "Input criteria",
-    lead: "The same criteria shown on the Replace and Animate tabs, side by side. ✓ marks recommendations, " +
-          "✕ marks inputs to avoid. “Limits” is what the pipeline enforces; “Limitations & disclaimers” is " +
-          "what the evaluation observed.",
-    guides: ["replace", "animate", "restore"] },
+  { group: "replace", title: "Replace character", nav: "Replace",
+    lead: "Everything about the Replace tab: input guide, strengths, limitations and worked examples." },
+
+  { id: "doc-replace-criteria", kicker: "Replacement · input guide", title: "How to choose your image and video", nav: "Input criteria",
+    lead: "The same criteria shown beside the Replace tab. ✓ marks recommendations, ✕ marks inputs to avoid. " +
+          "“Limits” is what the pipeline enforces; “Limitations & disclaimers” is what the evaluation observed.",
+    guides: ["replace"] },
 
   { id: "doc-replace-strengths", kicker: "Replacement", title: "Strengths", nav: "Replacement strengths",
     lead: "Portrait-oriented and half-body content produces effective character transfer, with strong " +
@@ -1291,12 +1303,20 @@ const DOCS = [
     callout: "The Replace tab's Gallery shows worked examples with the same three properties.",
   },
 
+  { group: "animate", title: "Animate", nav: "Animate",
+    lead: "Everything about the Animate tab: input guide, strengths, limitations and worked examples." },
+
+  { id: "doc-animate-guide", kicker: "Animation · input guide", title: "How to choose your image and video", nav: "Input criteria",
+    lead: "✓ marks recommendations, ✕ marks inputs to avoid. “Limits” is what the pipeline enforces; " +
+          "“Limitations & disclaimers” is what the evaluation observed.",
+    guides: ["animate"] },
+
   { id: "doc-animate-strengths", kicker: "Animation", title: "Strengths", nav: "Animation strengths",
     lead: "Portrait content performs best. Landscape is not a strength.",
     media: [{ key: "animStrength", cap: "A portrait reference and a portrait driving video — the configuration that performs best." }],
   },
 
-  { id: "doc-animate-criteria", kicker: "Animation", title: "Input criteria, summed up", nav: "Animation criteria",
+  { id: "doc-animate-criteria", kicker: "Animation", title: "Input criteria, summed up", nav: "Criteria summary",
     points: [
       "Use high-resolution sources with adequate framing.",
       "Match pose and body proportions between source and target, or the model hallucinates and falls back to the video's character.",
@@ -1351,6 +1371,22 @@ const DOCS = [
       { key: "goodC", cap: "A third clean run at the same settings." },
     ],
   },
+
+  { group: "restore", title: "Restore video", nav: "Restore",
+    lead: "Everything about the Restore tab: what it does, input guide and limits." },
+
+  { id: "doc-restore-about", kicker: "Restoration", title: "What it does", nav: "Restore overview",
+    lead: "Restores and sharpens a low-quality video. Upload a video only; no reference image is needed.",
+    points: [
+      "The result keeps the original audio and is returned as an H.264 MP4.",
+      "Frames are resampled to 30 fps and restored at a short side of 640 px, rounded to a multiple of 64.",
+      "Footage that is already sharp can be over-processed; very long clips take proportionally longer.",
+    ],
+    callout: "No formal evaluation has been written up for restoration yet; treat the first results as exploratory.",
+  },
+
+  { id: "doc-restore-criteria", kicker: "Restoration · input guide", title: "How to choose your video", nav: "Restore input criteria",
+    guides: ["restore"] },
 ];
 
 function docFigure(label, tag, src, cls) {
@@ -1400,7 +1436,22 @@ function buildDocs() {
   if (docsBuilt) return;
   docsBuilt = true;
   const body = document.getElementById("doc-body"), toc = document.getElementById("doc-toc");
+  let cur = body;
   for (const sec of DOCS) {
+    if (sec.group) {
+      sec.id = `doc-group-${sec.group}`;
+      const gl = document.createElement("li"), ga = document.createElement("a");
+      ga.href = `#${sec.id}`; ga.textContent = SERVICES[sec.group]?.label || sec.title; ga.className = "doc-group-link";
+      gl.append(ga); toc.append(gl);
+      cur = document.createElement("details"); cur.className = "doc-fold"; cur.id = sec.id;
+      const gh = document.createElement("summary"); gh.className = "doc-group";
+      const h2 = document.createElement("h2"); h2.textContent = SERVICES[sec.group]?.label || sec.title;
+      gh.append(h2);
+      if (sec.lead) { const p = document.createElement("p"); p.textContent = sec.lead; gh.append(p); }
+      cur.append(gh);
+      body.append(cur);
+      continue;
+    }
     const li = document.createElement("li"), a = document.createElement("a");
     a.href = `#${sec.id}`; a.textContent = sec.nav; li.append(a); toc.append(li);
 
@@ -1428,8 +1479,15 @@ function buildDocs() {
     }
     if (sec.callout) { const p = document.createElement("p"); p.className = "doc-callout"; p.textContent = sec.callout; el.append(p); }
     for (const spec of sec.media || []) { const node = docMedia(spec); if (node) el.append(node); }
-    body.append(el);
+    cur.append(el);
   }
+  // A link into a collapsed section opens it first.
+  toc.addEventListener("click", e => {
+    const a = e.target.closest("a"); if (!a) return;
+    const t = document.getElementById(a.getAttribute("href").slice(1));
+    const d = t && (t.matches("details") ? t : t.closest("details.doc-fold"));
+    if (d) d.open = true;
+  });
 }
 
 // ── tabs ────────────────────────────────────────────────────────────────────
