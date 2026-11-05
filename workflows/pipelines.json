@@ -58,7 +58,7 @@
       "blurb": "Gives an existing video a new voice: the speaker's lips are re-synced to the audio you upload, while their face, motion and background stay the same. Upload the video and the dubbed speech audio, each up to 30 minutes.",
       "notes": [
         "The video should show 1 or 2 people.",
-        "Processing time grows heavily as the video and audio get longer."
+        "One minute of video takes around 6 minutes to generate, so processing time grows heavily as the video and audio get longer."
       ],
       "gallery_blurb": "Examples of video lip sync: the original video and the result with the lips re-synced to the new audio.",
       "media": "video",
