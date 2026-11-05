@@ -639,6 +639,54 @@ const GUIDE = {
       ["Evaluation", "No formal evaluation has been written up for restoration yet; treat the first results as exploratory."]],
     tip: "Upload only the video you want restored. The result keeps its audio and is restored at a short side of 640 px, rounded to a multiple of 64.",
   },
+  // Script-pipeline tabs. audDo/audAvoid add an audio column; vidHeading/audHeading name the columns.
+  lipsync: {
+    imgDo: ["Exactly one face in the image",
+            "Upper-body framing preferred: head and shoulders down to about the waist",
+            "Front-facing, with the teeth visible if possible",
+            "A clean, simple background",
+            "Image quality of at least 1280 × 720"],
+    imgAvoid: ["Other people anywhere in the image, including in the background",
+               "Busy backgrounds or complex objects around the person",
+               "Three-quarter face angles (face turned partly away): they may show artifacts",
+               "Images smaller than 1280 × 720, blurred or heavily compressed"],
+    audHeading: "Speech audio",
+    audDo: ["Clear speech",
+            "One person talking at a time"],
+    audAvoid: ["Several people talking at the same time",
+               "Music, effects or loud background noise over the voice"],
+    limits: [["Image", "PNG, JPG, JPEG, WebP or BMP"],
+             ["Audio", "WAV, MP3, M4A, AAC, FLAC, OGG or OPUS"],
+             ["Audio length", "No limit: the whole audio is used"],
+             ["Output", "720p H.264 MP4 at 25 fps, with your audio"],
+             ["Time", "About 8–10 min per segment of ~3 s: 30 s of audio ≈ 1.5 h, 1 min ≈ 3 h, 5 min ≈ 15 h"]],
+    disclaimers: [
+      ["Face angle", "Three-quarter views may show artifacts around the face and mouth."],
+      ["Teeth", "Visible teeth in the image help keep them consistent while the person speaks."],
+      ["Long audio", "Long audio runs for many hours, and the video is available only when the whole job has finished."]],
+    tip: "Use a clear, front-facing upper-body photo of one person on a clean background, at least 1280 × 720, and a clean recording of one voice. The person in the image speaks the whole audio.",
+  },
+  dubbing: {
+    vidHeading: "Original video",
+    vidDo: ["One or two people in the video",
+            "The higher the video quality, the better the result",
+            "Faces fully visible and reasonably close to the camera"],
+    vidAvoid: ["Incomplete faces, such as half a face cut off by the frame",
+               "Very far shots where the faces are small",
+               "More than two people in the video"],
+    audHeading: "Dubbed audio",
+    audDo: ["The new speech for the video: new words or a new language"],
+    audAvoid: ["Silent audio: with no speech there is nothing to sync the lips to"],
+    limits: [["Video", "MP4, MOV, WebM, MKV, AVI or M4V, up to 30 minutes"],
+             ["Audio", "WAV, MP3, M4A, AAC, FLAC, OGG or OPUS, up to 30 minutes"],
+             ["Frame rate", "Resampled to 25 fps"],
+             ["Output", "H.264 MP4 with the new audio"],
+             ["Time", "Around 6 minutes of processing per minute of video"]],
+    disclaimers: [
+      ["People", "Videos with one or two people work best. With more people, the speaking face can be missed."],
+      ["Face visibility", "Faces that are cut off, turned away or very small are dubbed less accurately, or left unchanged."]],
+    tip: "Upload a clear, close video of one or two people with fully visible faces, plus the new speech audio. The lips follow the new audio; everything else in the video stays as it was.",
+  },
 };
 
 // Built once per place it is shown: the two service panels and the Documentation tab.
@@ -658,7 +706,8 @@ function guideCols(service) {
     return ul;
   };
   if (g.imgDo) col("Reference image", list("do", g.imgDo), list("avoid", g.imgAvoid, true));
-  col(g.imgDo ? "Driving video" : "Source video", list("do", g.vidDo), list("avoid", g.vidAvoid, true));
+  if (g.vidDo) col(g.vidHeading || (g.imgDo ? "Driving video" : "Source video"), list("do", g.vidDo), list("avoid", g.vidAvoid, true));
+  if (g.audDo) col(g.audHeading || "Audio", list("do", g.audDo), list("avoid", g.audAvoid || [], true));
 
   const table = document.createElement("table");
   table.className = "limits";
@@ -1221,6 +1270,8 @@ const DOCS = [
       "Replace character puts the character from your reference image into an existing video, keeping that video's motion, scene and audio.",
       "Animate drives the character in your reference image with the motion of a driving video; the driving video's background is not carried over.",
       "Restore video cleans up and sharpens a low-quality video, keeping its original audio. It needs no reference image.",
+      "Img Lipsync turns a single image into a talking video: the person in the image speaks the audio you upload.",
+      "Video Lipsync gives an existing video a new voice: the speaker's lips are re-synced to new audio, so you can change the language or the words without filming again.",
       "Jobs from every tab share one queue and run in submission order. Your finished results are kept in History, and you can only see your own.",
       "Below, each tab has its own collapsible section. Everything there is a quality recommendation derived from evaluation runs, not an acceptance rule enforced by the service.",
     ] },
@@ -1393,6 +1444,41 @@ const DOCS = [
 
   { id: "doc-restore-criteria", kicker: "Restoration · input guide", title: "How to choose your video", nav: "Restore input criteria",
     guides: ["restore"] },
+
+  { group: "lipsync", title: "Img Lipsync", nav: "Img Lipsync",
+    lead: "Everything about the Img Lipsync tab: what it does, input guide and timing." },
+
+  { id: "doc-lipsync-about", kicker: "Img Lipsync", title: "What it does", nav: "Img Lipsync overview",
+    lead: "Turns a single image into a talking video: the person in the image speaks the audio you upload, " +
+          "with lip movement that follows the speech.",
+    points: [
+      "Upload a reference image and a speech audio file. Nothing else is needed: the description of the scene is fixed by the service.",
+      "Face, clothing and background come from the image; the person speaks with calm expressions and gentle, natural head movement.",
+      "The result is a 720p H.264 MP4 at 25 fps that carries your audio.",
+      "The whole audio is used, with no length limit. It is generated in segments of about 3 seconds, each taking around 8 to 10 minutes: 30 seconds of audio takes around 1.5 hours, 1 minute around 3 hours and 5 minutes around 15 hours.",
+    ],
+  },
+
+  { id: "doc-lipsync-criteria", kicker: "Img Lipsync · input guide", title: "How to choose your image and audio", nav: "Img Lipsync input criteria",
+    guides: ["lipsync"] },
+
+  { group: "dubbing", title: "Video Lipsync", nav: "Video Lipsync",
+    lead: "Everything about the Video Lipsync tab: what it does, input guide and timing." },
+
+  { id: "doc-dubbing-about", kicker: "Video Lipsync", title: "What it does", nav: "Video Lipsync overview",
+    lead: "Gives an existing video a new voice: the speaker's lips are re-synced to the audio you upload, " +
+          "while their face, motion and background stay the same.",
+    points: [
+      "Use it to change the language of a video, or to change what is said, without filming again.",
+      "Upload the original video and the new speech audio, each up to 30 minutes.",
+      "In shots with several faces, the person who is talking is found and only that face is re-synced. Frames without a face are kept as they are.",
+      "The result is an H.264 MP4 at 25 fps that carries the new audio.",
+      "Every 1 minute of video takes around 6 minutes to generate, so processing time grows quickly with longer videos.",
+    ],
+  },
+
+  { id: "doc-dubbing-criteria", kicker: "Video Lipsync · input guide", title: "How to choose your video and audio", nav: "Video Lipsync input criteria",
+    guides: ["dubbing"] },
 ];
 
 function docFigure(label, tag, src, cls) {
@@ -1477,7 +1563,8 @@ function buildDocs() {
         const d = document.createElement("details"); d.className = "guide"; d.open = true;
         d.style.marginTop = "16px";
         const sum = document.createElement("summary");
-        sum.textContent = ({ replace: "Replacement — input guide", animate: "Animation — input guide", restore: "Restoration — input guide" })[service] || `${service} — input guide`;
+        sum.textContent = ({ replace: "Replacement — input guide", animate: "Animation — input guide", restore: "Restoration — input guide",
+                          lipsync: "Img Lipsync — input guide", dubbing: "Video Lipsync — input guide" })[service] || `${service} — input guide`;
         const wrap = document.createElement("div"); wrap.append(guideCols(service));
         const tip = document.createElement("p"); tip.className = "tip"; tip.textContent = GUIDE[service].tip;
         d.append(sum, wrap, tip); el.append(d);
