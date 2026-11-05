@@ -160,15 +160,8 @@ GPUS_FOR = {n: {b.gpu for b in bs} for n, bs in BY_WORKFLOW.items()}
 
 
 def _label(service: str) -> str:
-    """'Replace character (GPU 0, shared with Animate)'"""
-    gpus = sorted(GPUS_FOR.get(service, ()))
-    others = sorted(
-        {ADAPTERS[b.workflow].label for g in gpus for b in GPUS[g] if b.workflow != service}
-    )
-    where = f"GPU {', '.join(map(str, gpus))}" if gpus else "no GPU"
-    if others:
-        where += f", shared with {', '.join(others)}"
-    return f"{ADAPTERS[service].label} ({where})"
+    """The tab's name. Which GPU it runs on, and who shares it, is not shown to users."""
+    return ADAPTERS[service].label
 
 
 # ── jobs ─────────────────────────────────────────────────────────────────────
@@ -834,17 +827,14 @@ def status(_: User = Depends(current_user)) -> dict:
             out[name] = {
                 "state": "offline",
                 "label": _label(name),
-                "detail": "offline (" + ", ".join(b.client.base_url for b in servers) + ")",
+                "detail": "offline",
             }
             continue
         idle = [b for b in live if b.gpu not in busy_gpus]
         if idle:
             detail = "ready"
         else:
-            doing = sorted({ADAPTERS[busy_gpus[b.gpu].service].label for b in live})
-            detail = "busy" if doing == [ADAPTERS[name].label] else f"busy with {', '.join(doing)}"
-        if len(servers) > 1:
-            detail += f" · {len(idle)} of {len(servers)} servers free"
+            detail = "busy"
         if waiting[name]:
             detail += f" · {waiting[name]} waiting"
         out[name] = {
