@@ -238,6 +238,15 @@ def set_owner(service: str, name: str, user_id: int) -> None:
         )
 
 
+def remove_owner(user_id: int, service: str, name: str) -> bool:
+    with _db() as con:
+        cur = con.execute(
+            "DELETE FROM results WHERE service = ? AND name = ? AND user_id = ?",
+            (service, name, user_id),
+        )
+        return cur.rowcount > 0
+
+
 def owned(user_id: int) -> set[tuple[str, str]]:
     with _db() as con:
         return set(

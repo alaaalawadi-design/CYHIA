@@ -296,6 +296,9 @@
   .badge.animate { color: var(--red); }
   .case .meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 0 0 8px; }
   .case .meta-row a { margin-left: auto; color: var(--accent); }
+  .hist-remove { font: inherit; font-size: 13px; color: var(--bad); background: none; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 12px; cursor: pointer; }
+  .hist-remove:hover:not(:disabled) { border-color: var(--bad); }
+  .hist-remove:disabled { opacity: .5; cursor: default; }
   .case .hist-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 12px; align-items: start; }
   .case .ins { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .case .ins img, .case .ins video { max-height: 420px; }
@@ -1548,7 +1551,17 @@ function renderHistory() {
     const when = document.createElement("span"); when.textContent = new Date(r.finished * 1000).toLocaleString();
     const size = document.createElement("span"); size.textContent = `${(r.size / 1048576).toFixed(1)} MB`;
     const dl = document.createElement("a"); dl.href = r.url; dl.download = r.name; dl.textContent = "Download";
-    row.append(b, when, size, dl);
+    const rm = document.createElement("button"); rm.type = "button"; rm.className = "hist-remove"; rm.textContent = "Remove";
+    rm.addEventListener("click", async () => {
+      if (!confirm(`Remove ${r.name} from your history? The result and its saved inputs are deleted and cannot be recovered.`)) return;
+      rm.disabled = true;
+      try {
+        const resp = await fetch(r.url, { method: "DELETE" });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        history = history.filter(h => h !== r); renderHistory();
+      } catch (e) { rm.disabled = false; alert(`Could not remove it: ${e.message}`); }
+    });
+    row.append(b, when, size, dl, rm);
     const name = document.createElement("p"); name.className = "note fname"; name.textContent = r.name;
     const fig = (cap, el, wide) => {
       const f = document.createElement("figure"); if (wide) f.className = "wide";

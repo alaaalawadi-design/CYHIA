@@ -1132,6 +1132,33 @@ def history_video(service: str, name: str, user: User = Depends(current_user)):
     )
 
 
+@app.delete("/api/history/{service}/{name}")
+def history_delete(service: str, name: str, user: User = Depends(current_user)) -> dict:
+    """Remove one of the caller's results, and the inputs saved with it."""
+    if service not in ADAPTERS:
+        raise HTTPException(404, f"Unknown service '{service}'.")
+    root = (OUT_DIR / service).resolve()
+    f = (root / name).resolve()
+    if (
+        f.parent != root
+        or f.suffix.lower() not in VIDEO_EXT
+        or not auth.owns(user.id, service, f.name)
+    ):
+        raise HTTPException(404, "No such result.")
+    with _NAME_LOCK:
+        auth.remove_owner(user.id, service, f.name)
+        f.unlink(missing_ok=True)
+        folder = INPUT_DIR / service
+        if folder.is_dir():
+            for p in folder.glob(f"{f.stem}__*"):
+                p.unlink(missing_ok=True)
+        # Keep the run's number taken: _next_number also reads the inputs folder,
+        # so a later result can never reuse this name.
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{f.stem}__removed.txt").write_text("removed by its owner\n")
+    return {"removed": f.name}
+
+
 @app.get("/api/history/{service}/{name}/input/{kind}")
 def history_input(
     service: str, name: str, kind: str, user: User = Depends(current_user)
