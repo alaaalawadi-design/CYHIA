@@ -784,7 +784,8 @@ def services(_: User = Depends(current_user)) -> dict:
                 "needs_audio": getattr(ADAPTERS[n], "needs_audio", False),
                 "max_input_minutes": getattr(ADAPTERS[n], "max_input_minutes", 0),
                 "labels": getattr(ADAPTERS[n], "labels", {}),
-                "pipeline": n in pipelines.ADAPTERS,  # script pipeline tab (Img-/Video_Lipsync)
+                "pipeline": n in pipelines.ADAPTERS,  # script pipeline tab (Img/Video Lipsync)
+                "notes": getattr(ADAPTERS[n], "notes", []),  # points under the description
                 "gpus": sorted(GPUS_FOR[n]),
                 "servers": len(BY_WORKFLOW[n]),
             }

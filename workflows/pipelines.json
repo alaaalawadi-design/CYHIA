@@ -11,6 +11,7 @@
     "users never see or change it.",
     "max_input_minutes: longest video/audio accepted (checked in the page and by the worker).",
     "labels: captions in the gallery and History (image, video, audio, result).",
+    "notes: short points shown as a list under the tab's description.",
     "args: the fixed command-line settings of the script; users never change them.",
     "Keys are the script's options with _ instead of -, e.g. max_seconds -> --max-seconds.",
     "true = flag on, null = script default."
@@ -18,8 +19,12 @@
 
   "pipelines": {
     "lipsync": {
-      "label": "Img-Lipsync",
-      "blurb": "Makes the person in your image speak your audio, with accurate lip sync (LongCat-Video-Avatar 1.5). Upload a reference image and a speech audio file. It takes about 2 minutes of processing per second of audio.",
+      "label": "Img Lipsync",
+      "blurb": "Makes the person in your image speak your audio, with accurate lip sync. Upload a reference image and a speech audio file.",
+      "notes": [
+        "Each half minute of audio takes around 1 hour to process, so the longer the audio, the longer the wait.",
+        "Audio longer than 1 minute is cut at 1 minute."
+      ],
       "gallery_blurb": "Examples of image lip sync: the reference image and the talking video made from it.",
       "media": "audio",
       "needs_image": true,
@@ -49,8 +54,12 @@
     },
 
     "dubbing": {
-      "label": "Video_Lipsync",
-      "blurb": "Gives an existing video a new voice: the speaker's lips are re-synced to the audio you upload, while their face, motion and background stay the same (TBDub). Upload the video and the dubbed speech audio, each up to 30 minutes. In shots with several people, the one who is talking is found and dubbed.",
+      "label": "Video Lipsync",
+      "blurb": "Gives an existing video a new voice: the speaker's lips are re-synced to the audio you upload, while their face, motion and background stay the same. Upload the video and the dubbed speech audio, each up to 30 minutes.",
+      "notes": [
+        "The video should show 1 or 2 people.",
+        "Processing time grows heavily as the video and audio get longer."
+      ],
       "gallery_blurb": "Examples of video lip sync: the original video and the result with the lips re-synced to the new audio.",
       "media": "video",
       "needs_image": false,

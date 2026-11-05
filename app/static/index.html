@@ -218,6 +218,9 @@
   .thumb .audio-ico { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; pointer-events: none; }
   .thumb .audio-ico svg { width: 44px; height: 44px; opacity: .85; }
   .case .prompt-text { white-space: pre-wrap; }
+  /* Points under a tab's description (Img/Video Lipsync); tabs without notes have none. */
+  .blurb-notes { margin: -4px 0 16px; padding-left: 20px; max-width: 70ch; color: var(--muted); font-size: 14px; }
+  .blurb-notes li { margin: 2px 0; }
   .case audio { width: 100%; display: block; }
   @media (max-width: 880px) { .side .quota { grid-column: 1 / -1; } }
 
@@ -764,6 +767,11 @@ function makePanel(service) {
   const el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
   el.dataset.panel = service;
   el.querySelector(".blurb").textContent = SERVICES[service].blurb || "";
+  if ((SERVICES[service].notes || []).length) {   // Img/Video Lipsync: key points under the description
+    const ul = document.createElement("ul"); ul.className = "blurb-notes";
+    for (const t of SERVICES[service].notes) { const li = document.createElement("li"); li.textContent = t; ul.append(li); }
+    el.querySelector(".blurb").after(ul);
+  }
   const $ = s => el.querySelector(s);
   const files = { image: null, video: null };
   const needsImage = SERVICES[service].needs_image !== false;

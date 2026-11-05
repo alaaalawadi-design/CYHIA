@@ -59,6 +59,7 @@ class PipelineAdapter:
     max_prompt_chars: int = 4000
     max_input_minutes: float = 0    # longest video/audio accepted; 0 = no limit
     labels: dict = field(default_factory=dict)   # captions: image, video, audio, result
+    notes: list = field(default_factory=list)    # short points shown under the description
     args: dict = field(default_factory=dict)     # fixed script settings
     stages: dict = field(default_factory=dict)   # stage code -> label shown in the UI
     prefix: str = ""
@@ -263,6 +264,7 @@ def _load() -> dict[str, PipelineAdapter]:
             max_prompt_chars=int(s.get("max_prompt_chars", 4000)),
             max_input_minutes=float(s.get("max_input_minutes", 0) or 0),
             labels=dict(s.get("labels") or {}),
+            notes=[str(n) for n in (s.get("notes") or [])],
             args=dict(s.get("args") or {}),
             stages=dict(s.get("stages") or {}),
             prefix=s.get("prefix", ""),
